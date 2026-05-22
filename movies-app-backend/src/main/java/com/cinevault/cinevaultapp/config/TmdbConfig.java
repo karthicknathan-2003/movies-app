@@ -3,6 +3,7 @@ package com.cinevault.cinevaultapp.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
@@ -28,8 +29,16 @@ public class TmdbConfig {
      */
     @Bean
     public WebClient tmdbWebClient() {
+        // Increase codec buffer limit to 10MB to handle large anime season payloads.
+        ExchangeStrategies strategies = ExchangeStrategies.builder()
+                .codecs(config -> config
+                        .defaultCodecs()
+                        .maxInMemorySize(10 * 1024 * 1024)  // 10MB
+                )
+                .build();
         return WebClient.builder()
                 .baseUrl(baseUrl)
+                .exchangeStrategies(strategies)
                 .build();
     }
 }

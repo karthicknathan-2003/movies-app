@@ -54,4 +54,8 @@ public class TvDetailsDto {
      * List of seasons in the TV series.
      */
     private List<SeasonDto> seasons;
+
+    private int number_of_seasons;
+
+    private int number_of_episodes;
 }

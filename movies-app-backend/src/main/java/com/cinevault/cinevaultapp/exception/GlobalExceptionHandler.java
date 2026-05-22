@@ -6,6 +6,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 /**
  * Global exception handler for the CineVault application.
  * Handles exceptions thrown across all controllers and provides standardized error responses.
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    private static final Logger LOGGER = Logger.getLogger(GlobalExceptionHandler.class.getName());
 
     /**
      * Handles {@code TmdbException} thrown when TMDB API interactions fail.
@@ -28,6 +32,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(TmdbException.class)
     public ResponseEntity<?> handleTmdb(TmdbException ex) {
+        LOGGER.log(Level.SEVERE, "TMDB exception handled: " + ex.getMessage(), ex);
         return ResponseEntity
                 .status(HttpStatus.BAD_GATEWAY)
                 .body(new ErrorResponseDto(ex.getMessage()));
@@ -43,6 +48,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleAll(Exception e) {
+        // Log full stack trace for root-cause analysis while returning a safe response to clients.
+        LOGGER.log(Level.SEVERE, "Unhandled exception caught by global handler", e);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorResponseDto("Something went wrong"));

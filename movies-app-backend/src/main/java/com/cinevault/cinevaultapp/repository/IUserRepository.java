@@ -3,6 +3,7 @@ package com.cinevault.cinevaultapp.repository;
 import com.cinevault.cinevaultapp.entity.UserEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -21,7 +22,8 @@ public interface IUserRepository extends JpaRepository<UserEntity, Long> {
      *
      * @param userName - The username to search for.
      *
-     * @return - An {@code Optional} containing the {@code UserEntity} if found, empty otherwise.
+     * @return - An {@code Optional} containing the {@code UserEntity} if found,
+     *         empty otherwise.
      */
     Optional<UserEntity> findByUserName(String userName);
 
@@ -33,4 +35,14 @@ public interface IUserRepository extends JpaRepository<UserEntity, Long> {
      * @return - True if a user with the username exists, false otherwise.
      */
     boolean existsByUserName(String userName);
+
+    /**
+     * Finds all users excluding the specified username.
+     * Used for browsing all users except the current user.
+     *
+     * @param excludeUserName - The username to exclude from results.
+     *
+     * @return - A list of all users except the specified one.
+     */
+    List<UserEntity> findByUserNameNot(String excludeUserName);
 }

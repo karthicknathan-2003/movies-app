@@ -63,24 +63,24 @@ public class WatchListController {
      * @param authentication - The {@code Authentication} object containing user credentials.
      */
     @DeleteMapping("/{movieId}")
-    public void remove(@PathVariable Long movieId,
+    public void remove(@PathVariable Long movieId, @RequestParam Long groupId,
             Authentication authentication) {
-        watchListServices.removeFromWatchList(authentication.getName(), movieId);
+        watchListServices.removeFromWatchList(authentication.getName(), movieId, groupId);
     }
 
     /**
      * Retrieves a specific watchlist item by movie ID.
      *
-     * @param userName - The username of the authenticated user.
+     * @param authentication - The username of the authenticated user.
      * @param movieId - The unique identifier of the movie/show to retrieve.
      *
      * @return - A {@code ResponseEntity} containing the {@code WatchListDto} if found, or 404 if not found.
      */
     @GetMapping("/{movieId}")
     public ResponseEntity<WatchListDto> getWatchListItem(
-            @AuthenticationPrincipal String userName, @PathVariable Long movieId) {
+            Authentication authentication, @PathVariable Long movieId) {
         return watchListServices
-                .getWatchListItem(userName, movieId)
+                .getWatchListItem(authentication.getName(), movieId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -89,15 +89,17 @@ public class WatchListController {
      * Retrieves the watchlist status for a specific movie or TV show.
      * Indicates whether the item is in the watchlist and if it's marked as favorite.
      *
-     * @param userName - The username of the authenticated user.
+     * @param authentication - The username of the authenticated user.
      * @param movieId - The unique identifier of the movie/show to check.
      *
      * @return - A {@code WatchlistStatusDto} containing the status information.
      */
     @GetMapping("/{movieId}/status")
     public WatchlistStatusDto getStatus(
-            @AuthenticationPrincipal String userName, @PathVariable Long movieId) {
-        return watchListServices.getWatchlistStatus(userName, movieId);
+            Authentication authentication,
+            @PathVariable Long movieId,
+            @RequestParam(required = false) Long groupId) {  // ADD THIS
+        return watchListServices.getWatchlistStatus(authentication.getName(), movieId, groupId);
     }
 
     /**
@@ -111,5 +113,19 @@ public class WatchListController {
     public void updateStatus(@PathVariable Long movieId,
             @RequestParam WatchStatusEnum status, Principal principal) {
         watchListServices.updateStatus(principal.getName(), movieId, status);
+    }
+
+    /**
+     * Updates the favorite status of a specific watchlist item.
+     * Used when toggling an item between watchlist-only and favorited states.
+     *
+     * @param movieId        - The unique identifier of the movie/show to update.
+     * @param favorite       - The new favorite status to apply.
+     * @param authentication - The {@code Authentication} object containing user credentials.
+     */
+    @PatchMapping("/{movieId}/favorite")
+    public void updateFavorite(@PathVariable Long movieId, @RequestParam boolean favorite,
+                               Authentication authentication) {
+        watchListServices.updateFavorite(authentication.getName(), movieId, favorite);
     }
 }

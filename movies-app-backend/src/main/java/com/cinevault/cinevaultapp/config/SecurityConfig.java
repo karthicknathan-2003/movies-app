@@ -54,13 +54,12 @@ public class SecurityConfig {
         http.cors(cors -> {})
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/tmdb/**",
-                                "/api/auth/**"
-                        ).permitAll()
+                        // TMDB proxy and all auth endpoints (login, register, google) are public.
+                        .requestMatchers("/api/tmdb/**", "/api/auth/**").permitAll()
                         .requestMatchers("/api/watchlist/**").authenticated()
                         .anyRequest().authenticated()
-                ).addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                )
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

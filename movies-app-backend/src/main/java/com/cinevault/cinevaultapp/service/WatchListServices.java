@@ -5,12 +5,15 @@ import com.cinevault.cinevaultapp.dto.WatchListDto;
 import com.cinevault.cinevaultapp.dto.WatchlistStatusDto;
 import com.cinevault.cinevaultapp.entity.UserEntity;
 import com.cinevault.cinevaultapp.entity.WatchListEntity;
+import com.cinevault.cinevaultapp.entity.WatchlistGroupEntity;
 import com.cinevault.cinevaultapp.enums.MediaTypeEnum;
 import com.cinevault.cinevaultapp.enums.WatchStatusEnum;
 import com.cinevault.cinevaultapp.repository.IUserRepository;
 import com.cinevault.cinevaultapp.repository.IWatchListRepository;
+import com.cinevault.cinevaultapp.repository.IWatchlistGroupRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,6 +32,9 @@ public class WatchListServices {
 
     @Autowired
     private IWatchListRepository watchListRepository;
+
+    @Autowired
+    private IWatchlistGroupRepository watchlistGroupRepository;
 
     @Autowired
     private IUserRepository userRepository;
@@ -108,10 +114,11 @@ public class WatchListServices {
      *
      * @throws RuntimeException - If the movie is not found in the user's watchlist.
      */
-    public void removeFromWatchList(String username, Long movieId) {
+    public void removeFromWatchList(String username, Long movieId, Long groupId) {
         UserEntity user = authServices.getUser(username);
+        Optional<WatchlistGroupEntity> watchlistGroup = watchlistGroupRepository.findById(groupId);
         WatchListEntity entity = watchListRepository
-                .findByUserEntityAndMovieId(user, movieId)
+                .findByUserEntityAndMovieIdAndWatchlistGroup(user, movieId, watchlistGroup.get())
                 .orElseThrow(() -> new RuntimeException("Movie not found"));
 
         watchListRepository.delete(entity);
@@ -157,10 +164,23 @@ public class WatchListServices {
      *
      * @return - A {@code WatchlistStatusDto} containing the status information.
      */
-    public WatchlistStatusDto getWatchlistStatus(String username, Long movieId) {
+    public WatchlistStatusDto getWatchlistStatus(String username, Long movieId, Long watchListGroup) {
         UserEntity user = authServices.getUser(username);
+        // If no group provided, check across all groups
+        if (watchListGroup == null) {
+            return watchListRepository
+                    .findByUserEntityAndMovieId(user, movieId)
+                    .map(entity -> new WatchlistStatusDto(true, entity.isFavorite()))
+                    .orElseGet(() -> new WatchlistStatusDto(false, false));
+        }
+        // Find the group — if it doesn't exist, movie can't be in it
+        Optional<WatchlistGroupEntity> watchlistGroup = watchlistGroupRepository
+                .findById(watchListGroup);
+        if (watchlistGroup.isEmpty()) {
+            return new WatchlistStatusDto(false, false);
+        }
         return watchListRepository
-                .findByUserEntityAndMovieId(user, movieId)
+                .findByUserEntityAndMovieIdAndWatchlistGroup(user, movieId, watchlistGroup.get())
                 .map(entity -> new WatchlistStatusDto(true, entity.isFavorite()))
                 .orElseGet(() -> new WatchlistStatusDto(false, false));
     }
@@ -199,5 +219,22 @@ public class WatchListServices {
                 .map(g -> g.getName())
                 .toList()
                 : List.of();
+    }
+
+    /**
+     * Updates the favorite status of an existing watchlist item.
+     * Throws if the item is not found in the user's watchlist.
+     *
+     * @param userName - The username of the authenticated user.
+     * @param movieId  - The unique identifier of the movie/show to update.
+     * @param favorite - The new favorite status to set.
+     */
+    public void updateFavorite(String userName, Long movieId, boolean favorite) {
+        UserEntity user = authServices.getUser(userName);
+        WatchListEntity item = watchListRepository
+                .findByUserEntityAndMovieId(user, movieId)
+                .orElseThrow(() -> new RuntimeException("Item not found in watchlist"));
+        item.setFavorite(favorite);
+        watchListRepository.save(item);
     }
 }

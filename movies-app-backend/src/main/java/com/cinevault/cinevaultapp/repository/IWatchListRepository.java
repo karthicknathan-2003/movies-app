@@ -1,57 +1,61 @@
 package com.cinevault.cinevaultapp.repository;
 
-import com.cinevault.cinevaultapp.entity.WatchListEntity;
 import com.cinevault.cinevaultapp.entity.UserEntity;
+import com.cinevault.cinevaultapp.entity.WatchListEntity;
+import com.cinevault.cinevaultapp.entity.WatchlistGroupEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Repository interface for managing {@code WatchListEntity} persistence operations.
- * Provides methods for retrieving and filtering watchlist items by user and favorite status.
+ * JPA repository for {@link WatchListEntity}.
  *
  * @author karthicknathan
- * @since Feb 06, 2026
+ * @since Feb 04, 2026
  *
  * @version 1.0
  */
 public interface IWatchListRepository extends JpaRepository<WatchListEntity, Long> {
 
     /**
-     * Finds all watchlist items for a specific user.
+     * Finds a watchlist item by its owner and TMDB movie ID.
      *
-     * @param userEntity - The {@code UserEntity} whose watchlist items to retrieve.
+     * @param user    - The owner {@link UserEntity}.
+     * @param movieId - The TMDB ID of the media item.
      *
-     * @return - A list of {@code WatchListEntity} objects belonging to the user.
+     * @return - Optional containing the entity if found.
      */
-    List<WatchListEntity> findByUserEntity(UserEntity userEntity);
+    Optional<WatchListEntity> findByUserEntityAndMovieId(UserEntity user, Long movieId);
 
     /**
-     * Finds all favorite watchlist items for a specific user.
+     * Retrieves all watchlist items belonging to a specific user.
      *
-     * @param userEntity - The {@code UserEntity} whose favorite items to retrieve.
+     * @param user - The owner {@link UserEntity}.
      *
-     * @return - A list of {@code WatchListEntity} objects marked as favorite.
+     * @return - List of all watchlist items for the user.
      */
-    List<WatchListEntity> findByUserEntityAndFavoriteTrue(UserEntity userEntity);
+    List<WatchListEntity> findByUserEntity(UserEntity user);
 
     /**
-     * Finds all non-favorite watchlist items for a specific user.
+     * Retrieves all watchlist items belonging to a specific group.
      *
-     * @param userEntity - The {@code UserEntity} whose non-favorite items to retrieve.
+     * @param group - The {@link WatchlistGroupEntity} to query.
      *
-     * @return - A list of {@code WatchListEntity} objects not marked as favorite.
+     * @return - List of watchlist items in the given group.
      */
-    List<WatchListEntity> findByUserEntityAndFavoriteFalse(UserEntity userEntity);
+    List<WatchListEntity> findByWatchlistGroup(WatchlistGroupEntity group);
 
     /**
-     * Finds a specific watchlist item by user and movie ID.
+     * Finds a watchlist item by its owner, TMDB movie ID, and group.
+     * Used to prevent duplicate entries within the same group.
      *
-     * @param userEntity - The {@code UserEntity} who owns the watchlist item.
-     * @param movieId - The movie/show ID to search for.
+     * @param user    - The owner {@link UserEntity}.
+     * @param movieId - The TMDB ID of the media item.
+     * @param group   - The target {@link WatchlistGroupEntity}.
      *
-     * @return - An {@code Optional} containing the {@code WatchListEntity} if found, empty otherwise.
+     * @return - Optional containing the entity if a duplicate exists.
      */
-    Optional<WatchListEntity> findByUserEntityAndMovieId(UserEntity userEntity, Long movieId);
+    Optional<WatchListEntity> findByUserEntityAndMovieIdAndWatchlistGroup(
+            UserEntity user, Long movieId, WatchlistGroupEntity group);
 }

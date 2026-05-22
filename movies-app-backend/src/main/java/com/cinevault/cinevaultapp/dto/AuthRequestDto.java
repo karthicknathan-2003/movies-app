@@ -32,4 +32,10 @@ public class AuthRequestDto {
      * The user's password in plain text (will be encrypted before storage).
      */
     private String password;
+
+    /**
+     * The Google ID token (JWT) returned by the Google Sign-In button.
+     * Backend verifies this against Google's public keys.
+     */
+    private String credential;
 }

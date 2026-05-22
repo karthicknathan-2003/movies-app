@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
+import java.util.logging.Logger;
 
 /**
  * Utility class for handling JWT (JSON Web Token) operations.
@@ -22,6 +23,7 @@ import java.util.Date;
  */
 @Component
 public class JwtUtil {
+    private static final Logger LOGGER = Logger.getLogger(JwtUtil.class.getName());
 
     @Value("${jwt.secret}")
     private String secret;
@@ -48,6 +50,7 @@ public class JwtUtil {
      * @return - A signed JWT token string.
      */
     public String generateToken(String username) {
+        LOGGER.fine(() -> "Generating JWT token for username=" + username);
         return Jwts.builder()
                 .setSubject(username)
                 .setIssuedAt(new Date())
@@ -65,6 +68,7 @@ public class JwtUtil {
      * @return - The username stored in the token's subject claim.
      */
     public String extractUsername(String token) {
+        // Parsing also verifies signature, which helps us fail fast on tampered tokens.
         return Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())   // SAME KEY
                 .build()
@@ -89,8 +93,10 @@ public class JwtUtil {
                     .parseClaimsJws(token);
             return true;
         } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            LOGGER.fine(() -> "JWT validation failed because token is expired");
             throw e; // let filter handle
         } catch (Exception e) {
+            LOGGER.fine(() -> "JWT validation failed due to invalid token format/signature");
             return false;
         }
     }
@@ -104,6 +110,6 @@ public class JwtUtil {
      *
     public static void main(String[] args) {
         byte[] key = Keys.secretKeyFor(SignatureAlgorithm.HS512).getEncoded();
-        System.out.println(Base64.getEncoder().encodeToString(key));
+        Logger.getLogger(JwtUtil.class.getName()).info(Base64.getEncoder().encodeToString(key));
     }*/
 }

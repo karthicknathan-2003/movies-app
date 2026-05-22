@@ -9,6 +9,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Custom implementation of Spring Security's {@code UserDetailsService}.
@@ -21,6 +22,7 @@ import java.util.List;
  */
 @Service
 public class CustomUserDetailsServices implements UserDetailsService {
+    private static final Logger LOGGER = Logger.getLogger(CustomUserDetailsServices.class.getName());
 
     @Autowired
     private IUserRepository userRepository;
@@ -37,8 +39,10 @@ public class CustomUserDetailsServices implements UserDetailsService {
      */
     @Override
     public UserDetails loadUserByUsername(String userName) {
+        LOGGER.fine(() -> "Loading user details for username=" + userName);
         UserEntity user = userRepository.findByUserName(userName)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        // Roles/authorities are intentionally empty because authorization is token-gated by endpoint.
         return new org.springframework.security.core.userdetails.User(
                 user.getUserName(),
                 user.getPassword(),

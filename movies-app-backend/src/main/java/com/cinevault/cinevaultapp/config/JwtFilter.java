@@ -13,6 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * JWT authentication filter that validates JWT tokens on each request.
@@ -26,6 +27,7 @@ import java.util.List;
  */
 @Component
 public class JwtFilter extends OncePerRequestFilter {
+    private static final Logger LOGGER = Logger.getLogger(JwtFilter.class.getName());
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -52,6 +54,8 @@ public class JwtFilter extends OncePerRequestFilter {
             try {
                 if (jwtUtil.validateToken(token)) {
                     String username = jwtUtil.extractUsername(token);
+                    LOGGER.fine(() -> "JWT validated successfully for user=" + username
+                            + " path=" + request.getRequestURI());
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(
                                     username,
@@ -61,6 +65,7 @@ public class JwtFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             } catch (io.jsonwebtoken.ExpiredJwtException e) {
+                // Return a stable JSON shape so frontend can handle forced logout uniformly.
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json");
                 response.getWriter().write("""
@@ -69,9 +74,11 @@ public class JwtFilter extends OncePerRequestFilter {
                           "message": "Session expired. Please login again."
                         }
                         """);
+                LOGGER.warning(() -> "Expired JWT for path=" + request.getRequestURI());
                 return; // stop filter chain
             }
         }
+        // Continue with remaining filters regardless of public/authenticated route.
         filterChain.doFilter(request, response);
     }
 }

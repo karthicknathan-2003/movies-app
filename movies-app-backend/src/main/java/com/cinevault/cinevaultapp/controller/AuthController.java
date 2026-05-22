@@ -2,9 +2,11 @@ package com.cinevault.cinevaultapp.controller;
 
 import com.cinevault.cinevaultapp.dto.AuthRequestDto;
 import com.cinevault.cinevaultapp.dto.AuthResponseDto;
+import com.cinevault.cinevaultapp.dto.UserProfileDto;
 import com.cinevault.cinevaultapp.service.AuthServices;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -47,5 +49,17 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponseDto login(@RequestBody AuthRequestDto dto) {
         return authService.login(dto);
+    }
+
+    /**
+     * Exchanges a Google ID token for an application JWT.
+     *
+     * @param request - contains the Google credential (ID token) from the frontend.
+     * @return - {@code AuthResponseDto} with the userName and app JWT.
+     */
+    @PostMapping("/google")
+    public ResponseEntity<AuthResponseDto> googleLogin(@RequestBody AuthRequestDto request) {
+        AuthResponseDto response = authService.authenticateWithGoogle(request.getCredential());
+        return ResponseEntity.ok(response);
     }
 }

@@ -7,6 +7,7 @@ import lombok.Data;
 /**
  * Entity class representing a watchlist item in the database.
  * Stores information about movies or TV shows that users have added to their watchlist.
+ * Items may optionally belong to a {@link WatchlistGroupEntity}.
  *
  * @author karthicknathan
  * @since Feb 04, 2026
@@ -14,14 +15,18 @@ import lombok.Data;
  * @version 1.0
  */
 @Entity
-@Table(name = "watchlist")
+@Table(name = "watchlist",
+        uniqueConstraints = @UniqueConstraint(
+                columnNames = {"user_id", "movieId", "watchlist_group_id"}
+        )
+)
 @Data
 public class WatchListEntity {
     /**
      * The unique identifier for the watchlist item.
      */
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     /**
@@ -30,7 +35,7 @@ public class WatchListEntity {
     private Long movieId;
 
     /**
-     * The type of media - either "movie" or "tv".
+     * The type of media — either "movie" or "tv".
      */
     private String mediaType;
 
@@ -55,6 +60,15 @@ public class WatchListEntity {
     /**
      * The user who owns this watchlist item.
      */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
     private UserEntity userEntity;
+
+    /**
+     * The watchlist group this item belongs to.
+     * Null means the item sits in the default (ungrouped) watchlist.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "watchlist_group_id")
+    private WatchlistGroupEntity watchlistGroup;
 }

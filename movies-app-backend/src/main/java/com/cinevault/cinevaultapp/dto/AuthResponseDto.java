@@ -19,6 +19,8 @@ public class AuthResponseDto {
      */
     private String userName;
 
+    private String fullName;
+
     /**
      * The JWT token for subsequent authenticated requests.
      */

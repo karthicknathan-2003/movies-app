@@ -127,6 +127,11 @@ public class MovieDto {
     private List<Genre> genres;
 
     /**
+     * The path to the Profile image.
+     */
+    private String profile_path;
+
+    /**
      * Inner class representing a season of a TV series.
      */
     @Data

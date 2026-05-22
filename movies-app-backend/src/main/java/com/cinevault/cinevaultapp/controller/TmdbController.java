@@ -6,6 +6,7 @@ import com.cinevault.cinevaultapp.service.TmdbServices;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -41,7 +42,7 @@ public class TmdbController {
      * @return - A {@code PagedResponseDto} containing trending movies and series.
      */
     @GetMapping("/trending")
-    public PagedResponseDto<MovieDto> trendingMoviesAndSeries(@RequestParam(defaultValue = "1") int page) {
+    public PagedResponseDto<MovieDto> getTrendingMoviesAndSeries(@RequestParam(defaultValue = "1") int page) {
         return tmdbServices.getTrendingMoviesAndSeries(page);
     }
 
@@ -53,7 +54,7 @@ public class TmdbController {
      * @return - A {@code PagedResponseDto} containing popular movies and series.
      */
     @GetMapping("/popular")
-    public PagedResponseDto<MovieDto> popularMoviesAndSeries(@RequestParam(defaultValue = "1") int page) {
+    public PagedResponseDto<MovieDto> getPopularMoviesAndSeries(@RequestParam(defaultValue = "1") int page) {
         return tmdbServices.getPopularAll(page);
     }
 
@@ -79,9 +80,7 @@ public class TmdbController {
      * @return - A {@code MovieDto} containing detailed media information.
      */
     @GetMapping("/details")
-    public MovieDto getDetails(
-            @RequestParam MediaTypeEnum type,
-            @RequestParam Long id) {
+    public MovieDto getDetails(@RequestParam MediaTypeEnum type, @RequestParam Long id) {
         return tmdbServices.getMediaDetails(type, id);
     }
 
@@ -93,7 +92,7 @@ public class TmdbController {
      * @return - A {@code PagedResponseDto} containing top-rated TV shows.
      */
     @GetMapping("/tv/top-rated")
-    public PagedResponseDto<MovieDto> topRatedTv(@RequestParam(defaultValue = "1") int page) {
+    public PagedResponseDto<MovieDto> getTopRatedTv(@RequestParam(defaultValue = "1") int page) {
         return tmdbServices.getTopRatedTv(page);
     }
 
@@ -105,7 +104,7 @@ public class TmdbController {
      * @return - A {@code PagedResponseDto} containing top-rated movies.
      */
     @GetMapping("/movie/top-rated")
-    public PagedResponseDto<MovieDto> topRatedMovie(@RequestParam(defaultValue = "1") int page) {
+    public PagedResponseDto<MovieDto> getTopRatedMovie(@RequestParam(defaultValue = "1") int page) {
         return tmdbServices.getTopRatedMovie(page);
     }
 
@@ -119,17 +118,17 @@ public class TmdbController {
      */
     @GetMapping("/series/{id}/seasons")
     public TvDetailsDto getFullSeriesDetails(@PathVariable Long id) {
-        // Fetch main series details
+        // Fetch main series details.
         TvDetailsDto show = tmdbServices.getTvDetails(MediaTypeEnum.TV, id);
         if (show.getSeasons() != null) {
-            // Filter out season 0 (specials)
+            // Filter out season 0 (specials).
             List<SeasonDto> allSeasons = show.getSeasons().stream()
                     .filter(s -> s.getSeason_number() != 0)
                     .map(s -> {
-                        // Fetch episodes for each season (cached with @Cacheable in service)
+                        // Fetch episodes for each season (cached in service).
                         SeasonDto seasonDetails = tmdbServices.getSeasonDetails(id, s.getSeason_number());
 
-                        // Optional: calculate average rating per season
+                        // Optional: calculate average rating per season.
                         if (seasonDetails.getEpisodes() != null && !seasonDetails.getEpisodes().isEmpty()) {
                             double avg = seasonDetails.getEpisodes().stream()
                                     .mapToDouble(e -> e.getVote_average() != null ? e.getVote_average() : 0)
@@ -142,7 +141,6 @@ public class TmdbController {
                     .collect(Collectors.toList());
             show.setSeasons(allSeasons);
         }
-
         return show;
     }
 
@@ -155,7 +153,7 @@ public class TmdbController {
      * @return - A {@code CreditsDto} containing cast and crew information.
      */
     @GetMapping("/credits")
-    public CreditsDto credits(@RequestParam MediaTypeEnum type,  @RequestParam Long id) {
+    public CreditsDto getCredits(@RequestParam MediaTypeEnum type, @RequestParam Long id) {
         return tmdbServices.getCredits(type, id);
     }
 
@@ -179,9 +177,78 @@ public class TmdbController {
      * @return - A {@code PagedResponseDto} containing popular people.
      */
     @GetMapping("/person/popular")
-    public PagedResponseDto<PersonDto> popularPeople(
-            @RequestParam(defaultValue = "1") int page
-    ) {
+    public PagedResponseDto<PersonDto> getPopularPeople(@RequestParam(defaultValue = "1") int page) {
         return tmdbServices.getPopularPeople(page);
+    }
+
+    /**
+     * Retrieves paginated reviews for a specific movie or TV show.
+     *
+     * Handles both:
+     *   GET /api/tmdb/movie/{id}/reviews
+     *   GET /api/tmdb/tv/{id}/reviews
+     *
+     * @param mediaTypePath - "movie" or "tv" from the URL path variable.
+     * @param id            - The unique identifier of the media item.
+     * @param page          - The page number for pagination (defaults to 1).
+     * @return              - A ReviewsDto containing paginated reviews.
+     */
+    @GetMapping("/{mediaType}/{id}/reviews")
+    public ReviewsDto getReviews(
+            @PathVariable("mediaType") String mediaTypePath,
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "1") int page) {
+        MediaTypeEnum type = mediaTypePath.equalsIgnoreCase("movie")
+                ? MediaTypeEnum.MOVIE
+                : MediaTypeEnum.TV;
+        return tmdbServices.getReviews(type, id, page);
+    }
+
+    /**
+     * Returns all movies in a specific collection by its TMDB ID.
+     */
+    @GetMapping("/collection/{id}")
+    public CollectionDto getCollection(@PathVariable Long id) {
+        return tmdbServices.getCollection(id);
+    }
+
+    /**
+     * Searches for collections/franchises by name with pagination.
+     * Frontend calls this both for the default browsing view
+     * (using broad terms like "collection") and for user searches.
+     */
+    @GetMapping("/collections/search")
+    public PagedResponseDto<CollectionDto> searchCollections(@RequestParam String query,
+            @RequestParam(defaultValue = "1") int page) {
+        return tmdbServices.searchCollections(query, page);
+    }
+
+    /**
+     * Discover endpoint — powers the genre/filter browse page.
+     * All filter params are optional; omitting them returns all results
+     * sorted by popularity.
+     */
+    @GetMapping("/discover")
+    public PagedResponseDto<MovieDto> discover(@RequestParam(required = false) String mediaType,
+            @RequestParam(required = false) Long genreId,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(defaultValue = "popularity.desc") String sortBy,
+            @RequestParam(required = false) Double minRating,
+            @RequestParam(defaultValue = "1") int page) {
+        return tmdbServices.discover(mediaType, genreId, year, sortBy, minRating, page);
+    }
+
+    /**
+     * Watch providers for a movie or TV show.
+     * Returns the full TMDB providers response — frontend picks the
+     * user's region (default IN for India).
+     */
+    @GetMapping("/{mediaType}/{id}/watch-providers")
+    public Map<String, Object> getWatchProviders(@PathVariable String mediaType, @PathVariable Long id) {
+        // Validate mediaType to prevent path traversal.
+        if (!mediaType.equals("movie") && !mediaType.equals("tv")) {
+            throw new IllegalArgumentException("Invalid mediaType: " + mediaType);
+        }
+        return tmdbServices.getWatchProviders(mediaType, id);
     }
 }
