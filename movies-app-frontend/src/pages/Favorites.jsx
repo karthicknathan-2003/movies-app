@@ -6,44 +6,45 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { watchlistApi } from "@/api/watchlist";
-import { Card, BreadCrumbs } from "@/utils/helper";
-import { FaFilter, FaTrash } from "react-icons/fa";
+import { Card, BreadCrumbs, useClickOutsideDropdown } from "@/utils/helper";
+import { FaChevronDown, FaFilter, FaTrash } from "react-icons/fa";
 
 const STATUS_META = {
-    PLANNED:     { label: "Planned",     color: "bg-blue-600"   },
+    PLANNED: { label: "Planned", color: "bg-blue-600" },
     IN_PROGRESS: { label: "In Progress", color: "bg-yellow-500" },
-    COMPLETED:   { label: "Completed",   color: "bg-green-600"  },
-    DROPPED:     { label: "Dropped",     color: "bg-red-600"    },
+    COMPLETED: { label: "Completed", color: "bg-green-600" },
+    DROPPED: { label: "Dropped", color: "bg-red-600" },
 };
 
 const STATUS_ORDER = ["PLANNED", "IN_PROGRESS", "COMPLETED", "DROPPED"];
 
 const SORT_OPTIONS = {
-    DEFAULT:           { label: "Default",           order: ["PLANNED", "IN_PROGRESS", "COMPLETED", "DROPPED"] },
+    DEFAULT: { label: "Default", order: ["PLANNED", "IN_PROGRESS", "COMPLETED", "DROPPED"] },
     IN_PROGRESS_FIRST: { label: "In Progress First", order: ["IN_PROGRESS", "PLANNED", "COMPLETED", "DROPPED"] },
-    COMPLETED_FIRST:   { label: "Completed First",   order: ["COMPLETED", "IN_PROGRESS", "PLANNED", "DROPPED"] },
-    DROPPED_FIRST:     { label: "Dropped First",     order: ["DROPPED", "PLANNED", "IN_PROGRESS", "COMPLETED"] },
+    COMPLETED_FIRST: { label: "Completed First", order: ["COMPLETED", "IN_PROGRESS", "PLANNED", "DROPPED"] },
+    DROPPED_FIRST: { label: "Dropped First", order: ["DROPPED", "PLANNED", "IN_PROGRESS", "COMPLETED"] },
 };
 
 const TYPE_OPTIONS = {
-    ALL:   { label: "All"    },
+    ALL: { label: "All" },
     movie: { label: "Movies" },
-    tv:    { label: "Series" },
+    tv: { label: "Series" },
 };
 
 export default function Favorites() {
     const { user } = useAuth();
     const navigate = useNavigate();
 
-    const [loading, setLoading]           = useState(false);
-    const [items, setItems]               = useState([]);
-    const [openDropdown, setOpenDropdown] = useState(null);
-    const [filtersOpen, setFiltersOpen]   = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [items, setItems] = useState([]);
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
-    const [sortMode, setSortMode]         = useState("DEFAULT");
+    const [openDropdown, setOpenDropdown] = useClickOutsideDropdown();
+
+    const [sortMode, setSortMode] = useState("DEFAULT");
     const [statusFilter, setStatusFilter] = useState("ALL");
-    const [typeFilter, setTypeFilter]     = useState("ALL");
-    const [genreFilter, setGenreFilter]   = useState("ALL");
+    const [typeFilter, setTypeFilter] = useState("ALL");
+    const [genreFilter, setGenreFilter] = useState("ALL");
 
     const longPressTimer = useRef(null);
 
@@ -81,10 +82,12 @@ export default function Favorites() {
         setOpenDropdown(null);
         try {
             await watchlistApi.patch(`/${movieId}/status`, null, { params: { status: newStatus } });
-        } catch {
+        } catch (error) {
             setItems(prev);
+            const message = error.response?.data?.message || "Failed to update status.";
+            toast.error(message);
         }
-    }, [items]);
+    }, [items, setOpenDropdown]);
 
     const handleRemove = useCallback(async (e, movieId) => {
         e.stopPropagation();
@@ -101,7 +104,7 @@ export default function Favorites() {
 
     const handleTouchStart = useCallback((movieId) => {
         longPressTimer.current = setTimeout(() => setOpenDropdown(movieId), 500);
-    }, []);
+    }, [setOpenDropdown]);
 
     const handleTouchEnd = useCallback(() => {
         clearTimeout(longPressTimer.current);
@@ -114,8 +117,8 @@ export default function Favorites() {
     const getDisplayItems = () => {
         let result = [...items];
         if (statusFilter !== "ALL") result = result.filter(i => i.status === statusFilter);
-        if (typeFilter   !== "ALL") result = result.filter(i => i.mediaType === typeFilter);
-        if (genreFilter  !== "ALL") result = result.filter(i => i.genres?.includes(genreFilter));
+        if (typeFilter !== "ALL") result = result.filter(i => i.mediaType === typeFilter);
+        if (genreFilter !== "ALL") result = result.filter(i => i.genres?.includes(genreFilter));
         const order = SORT_OPTIONS[sortMode].order;
         result.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
         return result;
@@ -129,11 +132,10 @@ export default function Favorites() {
     return (
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-
                 <BreadCrumbs
                     overlay={false}
                     paths={[
-                        { name: "Home",    to: "/" },
+                        { name: "Home", to: "/" },
                         { name: "Profile", to: "/profile" },
                         { name: "Favorites" },
                     ]}
@@ -214,30 +216,33 @@ export default function Favorites() {
                                 onTouchEnd={handleTouchEnd}
                             >
                                 {/* Status badge — top-left. */}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setOpenDropdown(openDropdown === item.movieId ? null : item.movieId);
-                                    }}
-                                    className={`absolute top-2 left-2 z-20 text-[10px] px-2 py-1 rounded text-white font-medium ${STATUS_META[item.status].color}`}
-                                >
-                                    {STATUS_META[item.status].label}
-                                </button>
+                                <div className="status-dropdown-container">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOpenDropdown(openDropdown === item.movieId ? null : item.movieId);
+                                        }}
+                                        className={`absolute top-2 left-2 z-20 text-[10px] px-2 py-1 rounded-sm text-white font-medium flex items-center gap-1 ${STATUS_META[item.status].color}`}>
+                                        {STATUS_META[item.status].label}
+                                        {/* Chevron signals this is a dropdown — removes the "hidden gesture" problem */}
+                                        <FaChevronDown size={8} className="opacity-70" />
+                                    </button>
 
-                                {/* Status dropdown */}
-                                {openDropdown === item.movieId && (
-                                    <div className="absolute top-9 left-2 z-30 bg-black/90 rounded-md overflow-hidden shadow-lg">
-                                        {STATUS_ORDER.map(s => (
-                                            <button
-                                                key={s}
-                                                onClick={(e) => { e.stopPropagation(); updateStatus(item.movieId, s); }}
-                                                className={`block w-full px-3 py-2 text-xs text-left hover:bg-white/10 text-white ${item.status === s ? "opacity-50" : ""}`}
-                                            >
-                                                {STATUS_META[s].label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                                    {/* Status dropdown */}
+                                    {openDropdown === item.movieId && (
+                                        <div className="absolute top-9 left-2 z-30 bg-black/90 rounded-md overflow-hidden shadow-lg">
+                                            {STATUS_ORDER.map(s => (
+                                                <button
+                                                    key={s}
+                                                    onClick={(e) => { e.stopPropagation(); updateStatus(item.movieId, s); }}
+                                                    className={`block w-full px-3 py-2 text-xs text-left hover:bg-white/10 text-white ${item.status === s ? "opacity-50" : ""}`}
+                                                >
+                                                    {STATUS_META[s].label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Card — showType=true keeps the Movie/TV badge top-right. */}
                                 <Card

@@ -1,18 +1,22 @@
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import React, { useCallback, useEffect, useState } from "react";
 import { tmdb } from "../api/tmdb";
-import { BreadCrumbs, EpisodeTableHorizontal, Legend } from "@/utils/helper";
+import { BreadCrumbs, DetailPageSkeleton, EpisodeTableHorizontal, Legend, Row } from "@/utils/helper";
 
-import { FaPlus, FaStar, FaHeart, FaShareAlt, FaCheck, FaTv } from "react-icons/fa";
+import { FaPlus, FaStar, FaHeart, FaShareAlt, FaCheck, FaTv, FaFilm } from "react-icons/fa";
 import { useWatchlist } from "./hooks/useWatchlist";
 import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
 import { watchlistApi } from "@/api/watchlist";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
+import UserReviews from "./UserReviews";
+import WatchProviders from "./WatchProviders";
 
 export default function SeriesDetails() {
     const { id } = useParams();
+    const navigate = useNavigate();
 
+    const [credits, setCredits] = useState(null);
     const [show, setShow] = useState(null);
     const [seasons, setSeasons] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -30,9 +34,13 @@ export default function SeriesDetails() {
             setLoading(true);
             setError(false);
             try {
-                const res = await tmdb.get(`/series/${id}/seasons`);
+                const [res, creditRes] = await Promise.all([
+                    tmdb.get(`/series/${id}/seasons`),
+                    tmdb.get("/credits", { params: { type: "TV", id } }),
+                ]);
                 const showData = res.data;
                 setShow(showData);
+                setCredits(creditRes.data);
                 // Filter out Season 0 (Specials) and seasons with no episodes.
                 setSeasons(
                     (showData.seasons ?? []).filter(
@@ -115,7 +123,7 @@ export default function SeriesDetails() {
         navigator.share?.({ title: show.title || show.name, url: window.location.href });
     }, [show]);
 
-    if (loading) return <p className="text-center mt-10">Loading...</p>;
+    if (loading) return <DetailPageSkeleton />;
     if (error) return <p className="text-center mt-10 text-red-500">Failed to load series. Please refresh.</p>;
     if (!show) return <p className="text-center mt-10">Series not found.</p>;
 
@@ -128,14 +136,18 @@ export default function SeriesDetails() {
             / ((s.episodes ?? []).length || 1),
     }));
 
+    const director = credits?.crew?.filter((c) => c.job === "Director" || c.job === "Executive Producer").map((p) => p.name);
+    const producers = credits?.crew?.filter((c) => c.job === "Producer").map((p) => p.name);
+    const topCast = credits?.cast?.slice(0, 12);
+
     return (
+        window.scrollTo(0, 0),
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
             <AddToWatchlistModal
                 open={modalOpen}
                 onClose={handleModalClose}
                 mediaItem={modalItem}
             />
-
             <div
                 className="relative h-75 bg-cover bg-center"
                 style={{ backgroundImage: `url(https://image.tmdb.org/t/p/original${show.backdrop_path})` }}
@@ -143,7 +155,7 @@ export default function SeriesDetails() {
                 <div className="absolute inset-0 bg-black/60" />
                 <BreadCrumbs
                     paths={[
-                        { name: "Home",   to: "/" },
+                        { name: "Home", to: "/" },
                         { name: "Series", to: "/series" },
                         { name: show.title || show.name },
                     ]}
@@ -157,7 +169,7 @@ export default function SeriesDetails() {
                         <img
                             src={`https://image.tmdb.org/t/p/w300${show.poster_path}`}
                             alt={show.title || show.name}
-                            className="w-40 rounded-xl shadow object-cover"
+                            className="w-40 h-70 rounded-xl shadow object-cover"
                         />
 
                         <div className="flex-1">
@@ -176,9 +188,7 @@ export default function SeriesDetails() {
                             </div>
 
                             <p className="mt-3 max-w-3xl text-gray-700 dark:text-gray-300">{show.overview}</p>
-
                             <div className="mt-5 flex flex-wrap gap-3">
-
                                 <button
                                     onClick={handleWatchlist}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all duration-200 cursor-pointer
@@ -224,11 +234,38 @@ export default function SeriesDetails() {
                         <Legend color="bg-[#633875]" label="Garbage" />
                     </div>
 
+                    <div className="mt-10 grid md:grid-cols-2 gap-6">
+                        <div className="p-6 rounded-xl bg-zinc-100 dark:bg-zinc-800">
+                            <div className="flex items-center gap-2 mb-4">
+                                <FaFilm />
+                                <h3 className="font-bold">Crew</h3>
+                            </div>
+                            <p className="text-sm"><strong>Director:</strong> {director?.join(", ") || "N/A"}</p>
+                            <p className="text-sm mt-1"><strong>Producers:</strong> {producers?.join(", ") || "N/A"}</p>
+                        </div>
+
+                        <WatchProviders
+                            mediaType="TV"
+                            id={show.id}
+                        />
+                    </div>
+
                     {seasonColumns.length > 0
                         ? <EpisodeTableHorizontal seasonColumns={seasonColumns} />
                         : <p className="mt-6 text-center text-gray-500 dark:text-gray-400">No episode data available.</p>
                     }
+
+                    <Row
+                        title="Top Cast"
+                        items={topCast}
+                        loading={loading}
+                        showType={false}
+                        icon={<FaFilm />}
+                        iconColor="text-blue-500"
+                        onSelect={(item) => navigate(`/celebrities/${item.id}`)}
+                    />
                 </div>
+                <UserReviews mediaType="tv" />
             </div>
         </div>
     );

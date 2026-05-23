@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import React, { useCallback, useEffect, useState } from "react";
 import { tmdb } from "../api/tmdb";
-import { BreadCrumbs, EpisodeTableHorizontal, Legend } from "@/utils/helper";
+import { BreadCrumbs, DetailPageSkeleton, EpisodeTableHorizontal, Legend } from "@/utils/helper";
 
 import { FaPlus, FaStar, FaHeart, FaShareAlt, FaCheck } from "react-icons/fa";
 import { GiSwordsPower } from "react-icons/gi";
@@ -10,6 +10,7 @@ import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
 import { watchlistApi } from "@/api/watchlist";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
+import UserReviews from "./UserReviews";
 
 export default function AnimeDetails() {
     const { id } = useParams();
@@ -115,7 +116,7 @@ export default function AnimeDetails() {
         navigator.share?.({ title: show.name, url: window.location.href });
     }, [show]);
 
-    if (loading) return <p className="text-center mt-10">Loading...</p>;
+    if (loading) return <DetailPageSkeleton />;
     if (error) return <p className="text-center mt-10 text-red-500">Failed to load anime. Please refresh.</p>;
     if (!show) return <p className="text-center mt-10">Anime not found.</p>;
 
@@ -130,16 +131,15 @@ export default function AnimeDetails() {
     }));
 
     return (
+        window.scrollTo(0, 0),
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
-
             <AddToWatchlistModal
                 open={modalOpen}
                 onClose={handleModalClose}
                 mediaItem={modalItem}
             />
-
             <div
-                className="relative h-75 bg-cover bg-center"
+                className="relative h-70 bg-cover bg-center"
                 style={{ backgroundImage: `url(https://image.tmdb.org/t/p/original${show.backdrop_path})` }}
             >
                 <div className="absolute inset-0 bg-black/60" />
@@ -174,13 +174,13 @@ export default function AnimeDetails() {
                                 {show.seasons?.length > 0 && <span>{show.seasons.length} Season{show.seasons.length > 1 ? "s" : ""}</span>}
                                 {show.number_of_episodes && <span>· {show.number_of_episodes} Episodes</span>}
                                 {show.first_air_date && <span>· {show.first_air_date.slice(0, 4)}</span>}
+                                {/* Keeping the star emoji for now, later we can replace with a custom icon or SVG 
+                                    that matches the design better. */}
                                 {show.vote_average && <span>· ⭐ {show.vote_average.toFixed(1)}</span>}
                             </div>
 
                             <p className="mt-3 max-w-3xl text-gray-700 dark:text-gray-300">{show.overview}</p>
-
                             <div className="mt-5 flex flex-wrap gap-3">
-
                                 <button
                                     onClick={handleWatchlist}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all duration-200 cursor-pointer
@@ -231,6 +231,7 @@ export default function AnimeDetails() {
                         : <p className="mt-6 text-center text-gray-500 dark:text-gray-400">No episode data available.</p>
                     }
                 </div>
+                <UserReviews mediaType="ANIME" />
             </div>
         </div>
     );

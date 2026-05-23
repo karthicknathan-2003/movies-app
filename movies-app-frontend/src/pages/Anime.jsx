@@ -3,6 +3,7 @@ import { tmdb } from "../api/tmdb";
 import { BreadCrumbs, Card, SkeletonCard } from "@/utils/helper";
 import { useNavigate } from "react-router-dom";
 import Pagination from "@/components/Pagination";
+import { useRecentlyViewed } from "@/components/hooks/useRecentlyViewed";
 
 // Total number of pages available for exploration.
 const TOTAL_PAGES = 20;
@@ -18,12 +19,19 @@ export default function Anime() {
     const [page, setPage] = useState(1);
 
     const navigate = useNavigate();
+    const { addItem } = useRecentlyViewed();
 
     // Memoized navigation handler — avoids recreating this function on every render.
-    const goToAnime = useCallback(
-        (id) => navigate(`/anime/${id}`),
-        [navigate]
-    );
+    const goTo = useCallback((item) => {
+        // Track the visit before navigating.
+        addItem({
+            id: item.id,
+            title: item.title || item.name,
+            poster_path: item.poster_path,
+            media_type: "anime",
+        });
+        return navigate(`/anime/${item.id}`);
+    }, [navigate, addItem]);
 
     // Scroll to top when the page changes so the user sees fresh content from the start.
     const handlePageChange = (p) => {
@@ -93,9 +101,8 @@ export default function Anime() {
                                     item={{ ...item, media_type: "tv" }} // Anime uses the TV detail endpoint.
                                     showType={false}
                                     showTitle={false}
-                                    onClick={() => goToAnime(item.id)}
+                                    onClick={() => goTo(item)}
                                 />
-
                                 {/* Anime metadata shown below each card. */}
                                 <div className="text-center mt-2">
                                     {/* Global rank across all pages e.g. page 2 starts at 21. */}

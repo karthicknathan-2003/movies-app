@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { FaFilm, FaTv, FaDragon, FaUsers } from "react-icons/fa";
+import { FaFilm, FaTv, FaDragon, FaUsers, FaLayerGroup, FaCompass } from "react-icons/fa";
 
 const CATEGORIES = [
     {
@@ -39,6 +39,24 @@ const CATEGORIES = [
         bg: "bg-amber-50 dark:bg-amber-950/30",
         border: "border-amber-200 dark:border-amber-800",
     },
+    {
+        id: "franchises",
+        label: "Franchises",
+        icon: FaLayerGroup,
+        route: "/franchises",
+        iconColor: "text-violet-500",
+        bg: "bg-violet-50 dark:bg-violet-950/30",
+        border: "border-violet-200 dark:border-violet-800",
+    },
+    {
+        id: "discover",
+        label: "Discover",
+        icon: FaCompass,
+        route: "/discover",
+        iconColor: "text-sky-500",
+        bg: "bg-sky-50 dark:bg-sky-950/30",
+        border: "border-sky-200 dark:border-sky-800",
+    },
 ];
 
 export default function Catalog() {
@@ -47,18 +65,22 @@ export default function Catalog() {
     return (
         <div className="max-w-2xl mx-auto px-6 py-12">
             {/* <h1 className="text-2xl font-bold text-black dark:text-white mb-8 text-center">Catalog</h1> */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {CATEGORIES.map(({ id, label, icon: Icon, route, iconColor, bg, border }) => (
-                    <button
-                        key={id}
-                        onClick={() => navigate(route)}
-                        className={`aspect-square flex flex-col items-center justify-center gap-3 rounded-2xl border ${bg} ${border} hover:scale-105 active:scale-95 transition-transform duration-150 cursor-pointer`}
-                    >
-                        <Icon className={`text-3xl ${iconColor}`} />
-                        <span className="text-sm font-semibold text-black dark:text-white">{label}</span>
-                    </button>
-                ))}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                {CATEGORIES.map((category) => {
+                    const CategoryIcon = category.icon;
+
+                    return (
+                        <button
+                            key={category.id}
+                            onClick={() => navigate(category.route)}
+                            className={`aspect-square flex flex-col items-center justify-center gap-3 rounded-2xl border ${category.bg} ${category.border} hover:scale-105 active:scale-95 transition-transform duration-150 cursor-pointer`}
+                        >
+                            <CategoryIcon className={`text-3xl ${category.iconColor}`} />
+                            <span className="text-sm font-semibold text-black dark:text-white">{category.label}</span>
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
-}   
+}

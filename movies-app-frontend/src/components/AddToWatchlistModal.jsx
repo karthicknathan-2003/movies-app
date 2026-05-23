@@ -34,8 +34,9 @@ export default function AddToWatchlistModal({ open, onClose, mediaItem }) {
             try {
                 const res = await watchlistGroupApi.get("");
                 setGroups(res.data ?? []);
-            } catch {
-                toast.error("Could not load your watchlists.");
+            } catch (error) {
+                const message = error.response?.data?.message || "Could not load your watchlists.";
+                toast.error(message);
             } finally {
                 setLoadingGroups(false);
             }
@@ -59,7 +60,7 @@ export default function AddToWatchlistModal({ open, onClose, mediaItem }) {
     if (!open) return null;
 
     /* Add the item to a chosen group. */
-    const handleAdd = async (groupId) => {
+    const handleAdd = async (groupId, groupName) => {
         if (added.includes(groupId)) return; // Already added — no-op.
         setAddingTo(groupId);
         try {
@@ -71,10 +72,11 @@ export default function AddToWatchlistModal({ open, onClose, mediaItem }) {
                 favorite: false,
             });
             setAdded((prev) => [...prev, groupId]);
-            toast.success(`Added to "${groups.find(g => g.id === groupId)?.name}"`);
-        } catch (err) {
-            const msg = err.response?.data?.message ?? "Already in this watchlist";
-            toast.error(msg);
+            const name = groupName || groups.find(g => g.id === groupId)?.name;
+            toast.success(`Added to "${name}"`);
+        } catch (error) {
+            const message = error.response?.data?.message || "Already in this watchlist";
+            toast.error(message);
         } finally {
             setAddingTo(null);
         }
@@ -90,9 +92,10 @@ export default function AddToWatchlistModal({ open, onClose, mediaItem }) {
             setGroups((prev) => [...prev, created]);
             setCreating(false);
             setNewName("");
-            await handleAdd(created.id);
-        } catch {
-            toast.error("Could not create watchlist.");
+            await handleAdd(created.id, created.name);
+        } catch (error) {
+            const message = error.response?.data?.message || "Could not create watchlist.";
+            toast.error(message);
         } finally {
             setSaving(false);
         }

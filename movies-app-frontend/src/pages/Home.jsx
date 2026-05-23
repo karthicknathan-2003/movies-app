@@ -2,15 +2,15 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { tmdb } from "../api/tmdb";
 import { Grid } from "@/utils/helper";
-import { FaFire, FaSearch } from "react-icons/fa";
+import { FaFire } from "react-icons/fa";
 import { GiSwordsPower } from "react-icons/gi";
+import { useRecentlyViewed } from "@/components/hooks/useRecentlyViewed";
+import RecentlyViewed from "@/components/RecentlyViewed";
 
 export default function Home() {
     const navigate = useNavigate();
-
-    const [query, setQuery] = useState("");
-    const [results, setResults] = useState([]);
-    const [searchLoading, setSearchLoading] = useState(false);
+    const { recentlyViewed, clearAll } = useRecentlyViewed();
+    const { addItem } = useRecentlyViewed();
 
     const [trending, setTrending] = useState([]);
     const [popularAnime, setPopularAnime] = useState([]);
@@ -23,44 +23,18 @@ export default function Home() {
         (item.origin_country?.includes("JP") ?? true);
 
     const goTo = useCallback((item) => {
+        // Track the visit before navigating
+        addItem({
+            id: item.id,
+            title: item.title || item.name,
+            poster_path: item.poster_path,
+            media_type: isAnime(item) ? "anime" : item.media_type,
+        });
+
         if (item.media_type === "movie") return navigate(`/movies/${item.id}`);
         if (isAnime(item)) return navigate(`/anime/${item.id}`);
         navigate(`/series/${item.id}`);
-    }, [navigate]);
-
-    /* Search — single effect handles debounce + fetch*/
-    useEffect(() => {
-        const trimmed = query.trim();
-
-        if (!trimmed) {
-            setResults([]);
-            setSearchLoading(false);
-            return;
-        }
-
-        setSearchLoading(true);
-
-        //  Each effect run gets its own stale flag.
-        //  Flipped to true by cleanup when query changes — discards results silently.
-        let stale = false;
-
-        const timeout = setTimeout(async () => {
-            try {
-                const res = await tmdb.get("/search", { params: { query: trimmed } });
-                if (!stale) setResults(res.data.results ?? []);
-            } catch {
-                if (!stale) setResults([]);
-            } finally {
-                if (!stale) setSearchLoading(false);
-            }
-        }, [600]);
-
-        return () => {
-            stale = true;
-            clearTimeout(timeout);
-        };
-    }, [query]);
-
+    }, [navigate, addItem]);
     /*  Initial Page Load  */
     useEffect(() => {
         const load = async () => {
@@ -82,48 +56,16 @@ export default function Home() {
         load();
     }, []);
 
-    const showSearchResults = query.trim().length > 0;
-
     return (
         <div className="min-h-screen bg-white dark:bg-black">
             <div className="max-w-6xl mx-auto p-6">
-                {/* Search Input */}
-                <div className="relative">
-                    <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        className="w-full pl-10 p-3 rounded border border-black/20 dark:border-white/20
-                                   bg-white dark:bg-zinc-900 text-black dark:text-white
-                                   focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
-                        placeholder="Search movies, TV series, or anime..."
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                    />
-                </div>
-
                 {pageError && (
                     <p className="mt-8 text-center text-red-500">
                         Failed to load content. Please refresh the page.
                     </p>
                 )}
 
-                {showSearchResults ? (
-                    <>
-                        {!searchLoading && results.length === 0 && (
-                            <p className="mt-8 text-center text-black dark:text-white">
-                                No results found for "{query}"
-                            </p>
-                        )}
-                        <Grid
-                            title={`Results for "${query}"`}
-                            icon={<FaSearch />}
-                            iconColor="text-gray-500"
-                            items={results}
-                            onSelect={goTo}
-                            loading={searchLoading}
-                            showType
-                        />
-                    </>
-                ) : (
+                {!pageError && (
                     <>
                         <Grid
                             title="Trending This Week"
@@ -134,6 +76,7 @@ export default function Home() {
                             loading={pageLoading}
                             showType
                         />
+                        <br />
                         <Grid
                             title="Popular Anime"
                             icon={<GiSwordsPower />}
@@ -142,6 +85,8 @@ export default function Home() {
                             onSelect={(item) => navigate(`/anime/${item.id}`)}
                             loading={pageLoading}
                         />
+
+                        <RecentlyViewed items={recentlyViewed} clearAll={clearAll} />
                     </>
                 )}
             </div>

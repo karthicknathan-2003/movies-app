@@ -1,20 +1,18 @@
 import React, { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App.jsx'
-import { ServerDownProvider } from './components/context/ServerDownContext.jsx'
-import ServerStatusBridge from './ServerStatusBridge.jsx'
-import { AuthProvider } from './components/context/AuthContext.jsx'
 import { BrowserRouter } from 'react-router-dom'
+import { GoogleOAuthProvider } from '@react-oauth/google'
+import App from './App.jsx'
+import { AuthProvider } from './components/context/AuthContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ServerDownProvider>
-      <ServerStatusBridge />
+    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
       <AuthProvider>
         <BrowserRouter>
           <App />
         </BrowserRouter>
       </AuthProvider>
-    </ServerDownProvider>
+    </GoogleOAuthProvider>
   </StrictMode>,
 )

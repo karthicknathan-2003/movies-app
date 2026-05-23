@@ -1,45 +1,41 @@
 import axios from "axios";
+import { clearStoredSession, readToken } from "@/utils/authSession";
 
 // Base Axios instance for all auth-related requests.
-// Centralizing this means the base URL and headers only need to be changed in one place.
 const API = axios.create({
     baseURL: import.meta.env.VITE_AUTH_API_URL || "http://localhost:8080/api/auth",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
 });
 
-// Attach the JWT token to every outgoing request if one exists in localStorage.
-// This means callers never need to manually pass the Authorization header.
+// Attach the JWT token to every outgoing request if one exists.
 API.interceptors.request.use((config) => {
-    const token = localStorage.getItem("token");
+    const token = readToken();
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
 });
 
-// Automatically redirect to the login page on 401 Unauthorized responses.
-// This handles token expiry globally without each caller needing to check for it.
+// Redirect to login on 401 responses.
 API.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            localStorage.removeItem("token");
-            localStorage.removeItem("user");
+            clearStoredSession();
             window.location.href = "/login";
         }
         return Promise.reject(error);
     }
 );
 
-// Sends login credentials and returns the server response.
-export const loginUser = (data) => API.post("/login", data);
+// Sends the Google ID token to the backend and gets an app JWT back.
+export const googleLogin = (credential) =>
+    API.post("/google", { credential });
 
-// Sends registration data and returns the server response.
+// Legacy helpers kept for any remaining usages — can be removed later.
+export const loginUser    = (data) => API.post("/login",    data);
 export const registerUser = (data) => API.post("/register", data);
+export const logoutUser   = ()     => API.post("/logout");
 
-// Sends a logout request to invalidate the session on the server side.
-export const logoutUser = () => API.post("/logout");
-
-// Checks whether a token exists in localStorage as a quick client-side auth guard.
-// Note: this does not verify the token's validity or expiry — that is handled server-side.
-export const isLoggedIn = () => !!localStorage.getItem("token");
+// Quick client-side guard — does NOT validate the JWT.
+export const isLoggedIn = () => Boolean(readToken());

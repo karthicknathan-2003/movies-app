@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { tmdb } from "@/api/tmdb";
-import { BreadCrumbs, Row } from "@/utils/helper";
+import { BreadCrumbs, DetailPageSkeleton, Row } from "@/utils/helper";
 
 import {
     FaBirthdayCake,
@@ -51,18 +51,23 @@ export default function PersonDetails() {
 
     /* Navigate to the correct detail page based on the item's media type.
        Memoized to avoid recreating the function on every render. */
+    // Fixed — mirrors the same isAnime check used in Home.jsx and Watchlist.jsx
     const handleSelect = useCallback((item) => {
-        const path = item.media_type === "movie"
-            ? `/movies/${item.id}`
-            : `/series/${item.id}`;
-        navigate(path);
+        if (item.media_type === "movie") return navigate(`/movies/${item.id}`);
+        // Same genre+country check used in Home.jsx
+        const isAnime =
+            item.media_type === "tv" &&
+            (item.genre_ids?.includes(16) || item.genres?.some(g => g.id === 16));
+
+        navigate(isAnime ? `/anime/${item.id}` : `/series/${item.id}`);
     }, [navigate]);
 
-    if (loading) return <p className="text-center mt-10">Loading...</p>;
-    if (error)   return <p className="text-center mt-10 text-red-500">Failed to load celebrity. Please refresh.</p>;
-    if (!actor)  return <p className="text-center mt-10">Actor not found.</p>;
+    if (loading) return <DetailPageSkeleton />;
+    if (error) return <p className="text-center mt-10 text-red-500">Failed to load celebrity. Please refresh.</p>;
+    if (!actor) return <p className="text-center mt-10">Actor not found.</p>;
 
     return (
+        window.scrollTo(0, 0),
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
             {/* Hero backdrop — uses the actor's profile photo, overlaid with a dark scrim. */}
             <div
@@ -85,7 +90,6 @@ export default function PersonDetails() {
             <div className="max-w-7xl mx-auto px-4 md:px-6 -mt-24 relative">
                 <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-lg p-6">
                     <div className="flex flex-col md:flex-row gap-6">
-
                         {/* Profile photo — falls back to a local avatar if no image is available. */}
                         <img
                             src={
@@ -94,7 +98,7 @@ export default function PersonDetails() {
                                     : "/avatar-fallback.png"
                             }
                             alt={actor.name}
-                            className="w-48 h-80 rounded-xl shadow object-cover"
+                            className="w-48 h-70 rounded-xl shadow object-cover"
                         />
 
                         {/* Actor info — biography, birthday, birthplace, department, and popularity. */}

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import Pagination from "@/components/Pagination";
 import { FaSearch } from "react-icons/fa";
 import { useCatalogSearch } from "@/components/hooks/useCatalogSearch";
+import { useRecentlyViewed } from "@/components/hooks/useRecentlyViewed";
 
 const TOTAL_PAGES = 20;
 const PAGE_SIZE = 20;
@@ -17,14 +18,31 @@ export default function Movies() {
 
     const navigate = useNavigate();
     const { query, setQuery, filtered } = useCatalogSearch(movies);
+    const { addItem } = useRecentlyViewed();
 
-    const goToMovie = useCallback((id) => navigate(`/movies/${id}`), [navigate]);
+    // Memoized navigation handler — avoids recreating this function on every render.
+    const goTo = useCallback((item) => {
+        // Track the visit before navigating.
+        addItem({
+            id: item.id,
+            title: item.title || item.name,
+            poster_path: item.poster_path,
+            media_type: "movies",
+        });
+        return navigate(`/movies/${item.id}`);
+    }, [navigate, addItem]);
 
+    // Remove setQuery("") from handlePageChange.
     const handlePageChange = (p) => {
         setPage(p);
-        setQuery(""); // Clear search when navigating pages.
+        // Don't clear query here — user may want to search the same term on page 2.
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
+
+    // Instead reset page when query changes.
+    useEffect(() => {
+        setPage(1);
+    }, [query]);
 
     useEffect(() => {
         const fetchMovies = async () => {
@@ -100,7 +118,7 @@ export default function Movies() {
                                     item={{ ...item, media_type: "movie" }}
                                     showType={false}
                                     showTitle={false}
-                                    onClick={() => goToMovie(item.id)}
+                                    onClick={() => goTo(item)}
                                 />
                                 <div className="text-center mt-2">
                                     <span className="font-bold">{(page - 1) * PAGE_SIZE + index + 1}</span>

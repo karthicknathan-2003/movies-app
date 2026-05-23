@@ -26,4 +26,16 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    files: [
+      'src/components/context/**/*.{js,jsx}',
+      'src/components/ui/**/*.{js,jsx}',
+      'src/utils/**/*.{js,jsx}',
+    ],
+    rules: {
+      // These folders intentionally export hooks, helpers, and style variants
+      // alongside components, so the fast-refresh restriction is too noisy here.
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

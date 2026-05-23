@@ -3,6 +3,7 @@ import { tmdb } from "../api/tmdb";
 import { Card, SkeletonCard, BreadCrumbs } from "@/utils/helper";
 import { useNavigate } from "react-router-dom";
 import Pagination from "@/components/Pagination";
+import { useRecentlyViewed } from "@/components/hooks/useRecentlyViewed";
 
 const TOTAL_PAGES = 20;
 const PAGE_SIZE = 20;
@@ -14,8 +15,19 @@ export default function Series() {
     const [page, setPage] = useState(1);
 
     const navigate = useNavigate();
+    const { addItem } = useRecentlyViewed();
 
-    const goToSeries = useCallback((id) => navigate(`/series/${id}`), [navigate]);
+    // Memoized navigation handler — avoids recreating this function on every render.
+    const goTo = useCallback((item) => {
+        // Track the visit before navigating.
+        addItem({
+            id: item.id,
+            title: item.title || item.name,
+            poster_path: item.poster_path,
+            media_type: "series",
+        });
+        return navigate(`/series/${item.id}`);
+    }, [navigate, addItem]);
 
     const handlePageChange = (p) => {
         setPage(p);
@@ -71,7 +83,7 @@ export default function Series() {
                                     item={{ ...item, media_type: "tv" }}
                                     showType={false}
                                     showTitle={false}
-                                    onClick={() => goToSeries(item.id)}
+                                    onClick={() => goTo(item)}
                                 />
                                 <div className="text-center mt-2">
                                     <span className="font-bold">{(page - 1) * PAGE_SIZE + index + 1}</span>

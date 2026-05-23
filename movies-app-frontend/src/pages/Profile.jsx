@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaUser, FaHeart, FaList, FaSignOutAlt, FaPlus, FaTrash, FaSpinner } from "react-icons/fa";
+import { FaUser, FaHeart, FaList, FaPlus, FaTrash, FaSpinner, FaEdit, FaMapMarkerAlt } from "react-icons/fa";
 import { useAuth } from "@/components/context/AuthContext";
 import { toast } from "sonner";
 import { BreadCrumbs } from "@/utils/helper";
 import { watchlistGroupApi } from "@/api/tmdb";
+import { getCurrentUserProfile, getUserStats, updateUserProfile } from "@/api/userService";
+import ProfileEditModal from "@/components/ProfileEditModal";
 
 const DEFAULT_GROUP_NAME = "Watchlist";
 
@@ -18,6 +20,18 @@ export default function Profile() {
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [followers, setFollowers] = useState(0);
+  const [following, setFollowing] = useState(0);
+  const [profile, setProfile] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    getCurrentUserProfile()
+      .then((res) => setProfile(res.data))
+      .catch(console.error);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -27,14 +41,6 @@ export default function Profile() {
         const res = await watchlistGroupApi.get("");
         let existing = res.data ?? [];
 
-        const hasDefault = existing.some(
-          (g) => g.name.toLowerCase() === DEFAULT_GROUP_NAME.toLowerCase()
-        );
-        if (!hasDefault) {
-          const created = await watchlistGroupApi.post("", { name: DEFAULT_GROUP_NAME });
-          existing = [created.data, ...existing];
-        }
-
         existing.sort((a, b) => {
           if (a.name.toLowerCase() === DEFAULT_GROUP_NAME.toLowerCase()) return -1;
           if (b.name.toLowerCase() === DEFAULT_GROUP_NAME.toLowerCase()) return 1;
@@ -42,13 +48,30 @@ export default function Profile() {
         });
 
         setGroups(existing);
-      } catch {
-        toast.error("Failed to load watchlists.");
+      } catch (error) {
+        const message = error.response?.data?.message || "Failed to load watchlists.";
+        toast.error(message);
       } finally {
         setLoadingGroups(false);
       }
     };
     load();
+  }, [user]);
+
+  // Fetch user stats (followers, following)
+  useEffect(() => {
+    if (!user) return;
+    const loadStats = async () => {
+      try {
+        const res = await getUserStats(user);
+        setFollowers(res.data?.followers || 0);
+        setFollowing(res.data?.following || 0);
+      } catch (error) {
+        // Silently fail — stats are optional
+        console.warn("Failed to load user stats:", error);
+      }
+    };
+    loadStats();
   }, [user]);
 
   const handleLogout = useCallback(() => {
@@ -76,8 +99,9 @@ export default function Profile() {
       setNewName("");
       setCreating(false);
       toast.success(`"${res.data.name}" created.`);
-    } catch {
-      toast.error("Could not create watchlist.");
+    } catch (error) {
+      const message = error.response?.data?.message || "Could not create watchlist.";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -95,18 +119,40 @@ export default function Profile() {
       await watchlistGroupApi.delete(`/${groupId}`);
       setGroups((prev) => prev.filter(g => g.id !== groupId));
       toast.success(`"${groupName}" deleted.`);
-    } catch {
-      toast.error("Could not delete watchlist.");
+    } catch (error) {
+      const message = error.response?.data?.message || "Could not delete watchlist.";
+      toast.error(message);
     } finally {
       setDeletingId(null);
     }
   };
 
-  const isDefault = (name) => name.toLowerCase() === DEFAULT_GROUP_NAME.toLowerCase();
+  const handleProfileSave = async (data) => {
+    setSavingProfile(true);
+
+    try {
+      const res = await updateUserProfile(data);
+      setProfile(res.data);
+      setEditOpen(false);
+      toast.success('Profile updated successfully.');
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || 'Failed to update profile.'
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-
+      <ProfileEditModal
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        profile={profile}
+        onSave={handleProfileSave}
+        saving={savingProfile}
+      />
       {/* Inline breadcrumb — overlay=false renders in document flow with muted text. */}
       <BreadCrumbs
         overlay={false}
@@ -117,24 +163,118 @@ export default function Profile() {
       />
 
       {/* User info */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full bg-black dark:bg-white flex items-center justify-center flex-shrink-0">
-            <FaUser className="text-white dark:text-black text-sm" />
+      <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between mb-8 gap-6">
+        {/* LEFT: Avatar + Info */}
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 w-full">
+          {/* Avatar */}
+          <div className="flex justify-center w-full sm:w-auto">
+            <div className="w-24 h-24 sm:w-20 sm:h-20 rounded-full overflow-hidden border border-black/10 dark:border-white/10 shadow-sm">
+              {profile?.avatarUrl ? (
+                <img
+                  src={profile.avatarUrl}
+                  alt={profile.fullName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                  <FaUser className="text-white text-3xl sm:text-2xl" />
+                </div>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-base font-bold text-black dark:text-white leading-tight">{user}</p>
-            <p className="text-xs text-black/50 dark:text-white/50">Movie &amp; Series Enthusiast 🎬</p>
+
+          {/* Info */}
+          <div className="text-center sm:text-left">
+            <p className="text-xl font-bold text-black dark:text-white">
+              {profile?.fullName}
+            </p>
+
+            <p className="text-sm text-black/60 dark:text-white/60">
+              @{user}
+            </p>
+
+            {/* Location */}
+            {profile?.location && (
+              <p className="flex items-center justify-center sm:justify-start gap-1 text-sm mt-1 text-black/70 dark:text-white/70">
+                <FaMapMarkerAlt size={12} />
+                {profile.location}
+              </p>
+            )}
+
+            {/* Interests (Improved UI) */}
+            {profile?.interests && (
+              <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-2">
+                {profile.interests.split(",").map((interest, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-1 text-xs rounded-full
+                         bg-blue-100 dark:bg-blue-900/40
+                         text-blue-600 dark:text-blue-300
+                         font-medium"
+                  >
+                    {interest.trim()}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Bio */}
+            {profile?.bio && (
+              <p className="text-sm mt-2 max-w-md text-black/70 dark:text-white/70">
+                {profile.bio}
+              </p>
+            )}
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg text-red-600 border border-red-600/30 hover:bg-red-600/10 transition"
-        >
-          <FaSignOutAlt size={11} />
-          <span className="hidden sm:inline">Logout</span>
-        </button>
+
+        {/* RIGHT: Actions */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setEditOpen(true)}
+            className="px-4 py-2 rounded-lg bg-black text-white dark:bg-white dark:text-black flex items-center gap-2"
+          >
+            <FaEdit size={12} />
+            Edit
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 rounded-lg border text-red-500"
+          >
+            Logout
+          </button>
+        </div>
       </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+          <p className="text-xs text-black/60 dark:text-white/60 font-medium mb-1">Followers</p>
+          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{followers}</p>
+          <button
+            onClick={() => navigate(`/users/${user}/followers`)}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-2"
+          >
+            View all
+          </button>
+        </div>
+        <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+          <p className="text-xs text-black/60 dark:text-white/60 font-medium mb-1">Following</p>
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{following}</p>
+          <button
+            onClick={() => navigate(`/users/${user}/following`)}
+            className="text-xs text-green-600 dark:text-green-400 hover:underline mt-2"
+          >
+            View all
+          </button>
+        </div>
+        <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800">
+          <p className="text-xs text-black/60 dark:text-white/60 font-medium mb-1">Lists</p>
+          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{groups.length}</p>
+          <p className="text-xs text-black/40 dark:text-white/40 mt-2">Watchlists</p>
+        </div>
+      </div>
+
 
       {/* Section header */}
       <div className="flex items-center justify-between mb-3">
@@ -220,25 +360,16 @@ export default function Profile() {
                 </p>
               </div>
 
-              {isDefault(name) && (
-                <span className="absolute top-1.5 left-1.5 text-[9px] px-1.5 py-0.5 rounded-full
-                                    bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 font-semibold leading-none">
-                  Default
-                </span>
-              )}
-
-              {!isDefault(name) && (
-                <button
-                  onClick={(e) => handleDelete(e, id, name)}
-                  disabled={deletingId === id}
-                  className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 p-0.5"
-                >
-                  {deletingId === id
-                    ? <FaSpinner className="animate-spin" size={10} />
-                    : <FaTrash size={10} />
-                  }
-                </button>
-              )}
+              <button
+                onClick={(e) => handleDelete(e, id, name)}
+                disabled={deletingId === id}
+                className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 p-0.5"
+              >
+                {deletingId === id
+                  ? <FaSpinner className="animate-spin" size={10} />
+                  : <FaTrash size={10} />
+                }
+              </button>
             </button>
           ))}
 

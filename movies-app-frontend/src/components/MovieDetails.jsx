@@ -5,12 +5,9 @@ import {
     BreadCrumbs,
     formatRuntime,
     getColor,
-    getProfit,
-    getVerdict,
     Legend,
-    usd,
-    Card,
     Row,
+    DetailPageSkeleton,
 } from "@/utils/helper";
 
 import {
@@ -22,10 +19,6 @@ import {
     FaHeart,
     FaShareAlt,
     FaFilm,
-    FaMoneyBillWave,
-    FaTrophy,
-    FaChartLine,
-    FaChartPie,
     FaCheck,
 } from "react-icons/fa";
 
@@ -34,6 +27,8 @@ import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
 import { watchlistApi } from "@/api/watchlist";
+import UserReviews from "./UserReviews";
+import WatchProviders from "./WatchProviders";
 
 export default function MovieDetails() {
     const { id } = useParams();
@@ -52,6 +47,7 @@ export default function MovieDetails() {
     const { addToWatchlist, updateFavorite } = useWatchlist();
 
     useEffect(() => {
+        window.scrollTo(0, 0);
         const loadMovie = async () => {
             setLoading(true);
             setError(false);
@@ -65,7 +61,9 @@ export default function MovieDetails() {
                 setCredits(creditRes.data);
 
                 try {
-                    const watchlistRes = await watchlistApi.get(`/${movieData.id}/status`);
+                    const watchlistRes = await watchlistApi.get(`/${movieData.id}/status`, {
+                        params: { groupId: movieData.groupId }
+                    });
                     if (watchlistRes?.data?.inWatchlist) {
                         setIsInWatchlist(true);
                         setIsFavorite(watchlistRes.data.favorite);
@@ -141,25 +139,21 @@ export default function MovieDetails() {
         navigator.share?.({ title: movie.title, url: window.location.href });
     }, [movie]);
 
-    if (loading) return <p className="text-center mt-10">Loading...</p>;
+    if (loading) return <DetailPageSkeleton />;
     if (error) return <p className="text-center mt-10 text-red-500">Failed to load movie. Please refresh.</p>;
     if (!movie) return <p className="text-center mt-10">Movie not found.</p>;
 
     const director = credits?.crew?.find((c) => c.job === "Director")?.name;
     const producers = credits?.crew?.filter((c) => c.job === "Producer").map((p) => p.name);
     const topCast = credits?.cast?.slice(0, 12);
-    const profit = getProfit(movie.budget, movie.revenue);
-    const verdict = getVerdict(movie.budget, movie.revenue);
-
     return (
+        window.scrollTo(0, 0),
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
-
             <AddToWatchlistModal
                 open={modalOpen}
                 onClose={handleModalClose}
                 mediaItem={modalItem}
             />
-
             <div
                 className="relative h-75 bg-cover bg-center"
                 style={{ backgroundImage: `url(https://image.tmdb.org/t/p/original${movie.backdrop_path})` }}
@@ -167,7 +161,7 @@ export default function MovieDetails() {
                 <div className="absolute inset-0 bg-black/60" />
                 <BreadCrumbs
                     paths={[
-                        { name: "Home",   to: "/" },
+                        { name: "Home", to: "/" },
                         { name: "Movies", to: "/movies" },
                         { name: movie.title },
                     ]}
@@ -176,12 +170,11 @@ export default function MovieDetails() {
 
             <div className="max-w-7xl mx-auto px-4 md:px-6 -mt-24 relative">
                 <div className="rounded-xl shadow-lg p-6 bg-white dark:bg-zinc-900">
-
                     <div className="flex flex-col md:flex-row gap-6">
                         <img
                             src={`https://image.tmdb.org/t/p/w300${movie.poster_path}`}
                             alt={movie.title}
-                            className="w-44 rounded-xl shadow"
+                            className="w-44 rounded-xl shadow h-70"
                         />
 
                         <div className="flex-1">
@@ -257,25 +250,21 @@ export default function MovieDetails() {
 
                     <div className="mt-10 grid md:grid-cols-2 gap-6">
                         <div className="p-6 rounded-xl bg-zinc-100 dark:bg-zinc-800">
-                            <h3 className="font-semibold mb-2">Crew</h3>
-                            <p className="text-sm"><FaFilm /> <strong>Director:</strong> {director || "N/A"}</p>
-                            <p className="text-sm mt-1"><FaFilm /> <strong>Producers:</strong> {producers?.join(", ") || "N/A"}</p>
+                            <div className="flex items-center gap-2 mb-4">
+                                <FaFilm />
+                                <h3 className="font-bold">Crew</h3>
+                            </div>
+                            <p className="text-sm"><strong>Director:</strong> {
+                                director?.length > 1 ? director : director?.join(", ") || "N/A"
+                            }
+                            </p>
+                            <p className="text-sm mt-1"><strong>Producers:</strong> {producers?.join(", ") || "N/A"}</p>
                         </div>
 
-                        <div className="p-6 rounded-xl bg-zinc-100 dark:bg-zinc-800">
-                            <h3 className="font-semibold mb-4">Box Office</h3>
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between"><span><FaMoneyBillWave /> Budget</span><span>{usd(movie.budget)}</span></div>
-                                <div className="flex justify-between font-semibold"><span><FaTrophy /> Collection</span><span>{usd(movie.revenue)}</span></div>
-                                {profit !== null && (
-                                    <div className="flex justify-between">
-                                        <span>{profit > 0 ? <FaChartLine /> : <FaChartPie />} {profit > 0 ? "Profit" : "Loss"}</span>
-                                        <span>{usd(Math.abs(profit))}</span>
-                                    </div>
-                                )}
-                                {verdict && <span className="inline-block px-3 py-1 text-xs rounded-full bg-green-500 text-white">{verdict}</span>}
-                            </div>
-                        </div>
+                        <WatchProviders
+                            mediaType="MOVIE"
+                            id={movie.id}
+                        />
                     </div>
 
                     <Row
@@ -288,6 +277,7 @@ export default function MovieDetails() {
                         onSelect={(item) => navigate(`/celebrities/${item.id}`)}
                     />
                 </div>
+                <UserReviews mediaType="MOVIE" />
             </div>
         </div>
     );

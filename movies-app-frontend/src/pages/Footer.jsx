@@ -8,10 +8,9 @@ export default function Footer() {
     const authorName = import.meta.env.VITE_AUTHOR_NAME || "the developer";
 
     return (
-        <footer className="bg-white dark:bg-black text-black dark:text-white">
+        <footer className="bg-white dark:bg-black text-black dark:text-white my-6">
             <Separator className="bg-gray-200 dark:bg-[#232223]" />
             <div className="max-w-6xl mx-auto px-6 py-8">
-
                 {/* Top row — brand, tagline, and API badge. */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                     <div>
@@ -32,6 +31,7 @@ export default function Footer() {
                             href="https://www.themoviedb.org/"
                             target="_blank"
                             rel="noreferrer"
+                            className="text-sm text-muted-foreground hover:text-black dark:hover:text-white underline-offset-2 hover:underline transition"
                         >
                             {/* TMDB brand color dot indicator. */}
                             <span className="w-2 h-2 rounded-full bg-[#01b4e4] shrink-0" />
@@ -69,13 +69,13 @@ export default function Footer() {
                                 href="https://github.com/karthicknathan-2003"
                                 target="_blank"
                                 rel="noreferrer"
+                                className="text-sm text-muted-foreground hover:text-black dark:hover:text-white underline-offset-2 hover:underline transition"
                             >
                                 {authorName}
                             </a>
                         </Button>
                     </p>
                 </div>
-
             </div>
         </footer>
     );

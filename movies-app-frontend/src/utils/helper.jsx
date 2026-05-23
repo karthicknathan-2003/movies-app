@@ -1,7 +1,9 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@radix-ui/react-tooltip";
-import { FaStar } from "react-icons/fa";
+import { ArrowLeft } from "lucide-react";
+import { FaFilm, FaStar } from "react-icons/fa";
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 // Conversion rate used to display budgets and revenues in Indian Rupees.
 export const USD_TO_INR = 83;
@@ -67,7 +69,7 @@ export function SkeletonCard() {
    Shows an empty state message when loading is done but no items are available. */
 export function Row({ title, items, onSelect, loading, showType, icon, iconColor }) {
     return (
-        <div className="mt-12">
+        <div className="mt-8">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-black dark:text-white">
                 <span className={iconColor}>{icon}</span>
                 {title}
@@ -98,63 +100,51 @@ export function Row({ title, items, onSelect, loading, showType, icon, iconColor
    Adapts its badges and image source based on the item's media_type.
    Falls back to the placeholder image if the TMDB image fails to load. */
 export function Card({ item, onClick, showType, showTitle = true }) {
-
-    // Handles broken TMDB image URLs by swapping in the local fallback poster.
-    const handleImageError = (e) => {
-        e.currentTarget.src = "https://placehold.co/300x450?text=No+Poster";
-    };
-
+    const [imgError, setImgError] = useState(false);
     return (
-        <div
-            onClick={onClick}
-            className="min-w-[150px] group cursor-pointer relative"
-        >
-            {/* Rating badge — only shown when the item has a non-zero vote average. */}
+        <div onClick={onClick} className="min-w-[150px] group cursor-pointer relative">
+            {/* Rating badge */}
             {item.vote_average > 0 && (
-                <span className="absolute top-2 left-2 z-10 text-[11px] px-2 py-1 rounded bg-black text-white flex items-center gap-1">
+                <span className="absolute top-2 left-2 z-10 text-[11px] px-2 py-1
+                                 rounded bg-black text-white flex items-center gap-1">
                     <FaStar size={11} className="text-yellow-500" />
                     <span>{item.vote_average.toFixed(1)}</span>
                 </span>
             )}
 
-            {/* Media type badge — shown for movies and TV, hidden for people. */}
+            {/* Media type badge */}
             {showType && item.media_type !== "person" && (
-                <span className="absolute top-2 right-2 z-10 text-[10px] px-2 py-1 rounded bg-black text-white">
+                <span className="absolute top-2 right-2 z-10 text-[10px] px-2 py-1
+                                 rounded bg-black text-white">
                     {item.media_type === "movie" ? "Movie" : "TV"}
                 </span>
             )}
 
-            {/* Person-specific badges — replaces rating with popularity and shows department. */}
-            {showType && item.media_type === "person" && (
-                <>
-                    <span className="absolute top-2 left-2 z-10 text-[11px] px-2 py-1 rounded bg-black text-white flex items-center gap-1">
-                        <FaStar size={11} className="text-yellow-500" />
-                        <span>{item.popularity.toFixed(0)}</span>
-                    </span>
-
-                    <span className="absolute top-2 right-2 z-10 text-[10px] px-2 py-1 rounded bg-black text-white">
-                        {item.known_for_department}
-                    </span>
-                </>
+            {/* Use state instead of src-swap to avoid infinite onError loop. */}
+            {imgError ? (
+                <div className="w-full h-[225px] rounded-xl bg-zinc-200 dark:bg-zinc-700
+                                flex items-center justify-center">
+                    <FaFilm className="text-zinc-400" size={32} />
+                </div>
+            ) : (
+                <img
+                    src={getPoster(item.poster_path || item.profile_path)}
+                    alt={item.title || item.name}
+                    onError={() => setImgError(true)}
+                    className="w-full h-[225px] object-cover rounded-xl
+                               bg-gray-200 dark:bg-zinc-700
+                               group-hover:scale-105 transition"
+                />
             )}
 
-            {/* Poster image — falls back to profile_path for people who don't have posters.
-                onError swaps in the placeholder if the remote image fails to load. */}
-            <img
-                src={getPoster(item.poster_path || item.profile_path)}
-                alt={item.title || item.name}
-                onError={handleImageError}
-                className="w-full h-[225px] object-cover rounded-xl bg-gray-200 dark:bg-zinc-700 group-hover:scale-105 transition"
-            />
-
-            {/* Title shown below the poster — hidden when showTitle is false. */}
             {showTitle && (
-                <p className="mt-2 text-sm text-center line-clamp-2 text-black dark:text-white group-hover:font-semibold">
+                <p className="mt-2 text-sm text-center line-clamp-2
+                              text-black dark:text-white
+                              group-hover:font-semibold transition-all">
                     {item.title || item.name}
                 </p>
             )}
 
-            {/* Character name — only rendered when the item is part of a cast list. */}
             {item.character && (
                 <p className="mt-1 text-xs text-center text-gray-500 dark:text-gray-400 line-clamp-1">
                     as {item.character}
@@ -287,8 +277,7 @@ export function EpisodeTable({ seasonColumns }) {
     );
 }
 
-// /* Horizontal episode table — seasons as rows, episodes as columns.
-//    Uses EpisodeCell with tooltips and a sticky season label column for wide tables. */
+/* Horizontal episode table — seasons as rows, episodes as columns. Uses EpisodeCell with tooltips and a sticky season label column for wide tables. */
 // export function EpisodeTableHorizontal({ seasonColumns }) {
 //     if (!seasonColumns || seasonColumns.length === 0) return null;
 
@@ -352,9 +341,7 @@ export function EpisodeTable({ seasonColumns }) {
    Continuation chunk rows show no season label or AVG to avoid repetition. */
 export function EpisodeTableHorizontal({ seasonColumns }) {
     if (!seasonColumns || seasonColumns.length === 0) return null;
-
     const CHUNK_SIZE = 20;
-
     // Build flat list of display rows — each season may span multiple rows.
     const rows = [];
     for (const season of seasonColumns) {
@@ -425,11 +412,20 @@ export function EpisodeTableHorizontal({ seasonColumns }) {
    The last item is always rendered as plain bold text since it's the current page. */
 export function BreadCrumbs({ paths = [], overlay = true }) {
     const wrapperClass = overlay
-        ? "absolute z-10 top-4 left-4 sm:top-6 sm:left-6 md:top-8 md:left-12 lg:top-8 lg:left-38 text-sm text-white/90 flex items-center gap-2 flex-wrap"
+        ? "absolute z-10 top-4 left-4 sm:top-6 sm:left-6 md:top-8 md:left-12 lg:top-8 lg:left-56 text-sm text-white/90 flex items-center gap-2 flex-wrap"
         : "flex items-center gap-1.5 text-xs text-black/50 dark:text-white/40 mb-6 flex-wrap";
 
     return (
         <div className={wrapperClass}>
+            <button
+                onClick={() => window.history.back()}
+                className={overlay
+                    ? "hover:underline"
+                    : "hover:text-black dark:hover:text-white transition"
+                }
+            >
+                <ArrowLeft size={16} className={` ${overlay ? "text-white/90" : "text-black/50 dark:text-white/40"} text-xs cursor-pointer`} />
+            </button>
             {paths.map((item, index) => {
                 const isLast = index === paths.length - 1;
                 return (
@@ -464,7 +460,7 @@ export function BreadCrumbs({ paths = [], overlay = true }) {
 /* Responsive multi-line grid of cards with a title, icon, and loading state. */
 export function Grid({ title, items, onSelect, loading, showType, icon, iconColor }) {
     return (
-        <div className="mt-10">
+        <div className="mt-2">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-black dark:text-white">
                 <span className={iconColor}>{icon}</span>
                 {title}
@@ -487,4 +483,95 @@ export function Grid({ title, items, onSelect, loading, showType, icon, iconColo
             </div>
         </div>
     );
+}
+
+export function DetailPageSkeleton() {
+    return (
+        <div className="min-h-screen bg-white dark:bg-black animate-pulse">
+            {/* Hero backdrop skeleton */}
+            <div className="h-72 bg-zinc-200 dark:bg-zinc-800" />
+            <div className="max-w-7xl mx-auto px-4 md:px-6 -mt-24 relative">
+                <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-lg p-6">
+                    <div className="flex flex-col md:flex-row gap-6">
+                        {/* Poster */}
+                        <div className="w-40 h-60 rounded-xl bg-zinc-200 dark:bg-zinc-700 flex-shrink-0" />
+                        {/* Info */}
+                        <div className="flex-1 space-y-3 pt-2">
+                            <div className="h-8 w-2/3 rounded bg-zinc-200 dark:bg-zinc-700" />
+                            <div className="h-4 w-1/3 rounded bg-zinc-200 dark:bg-zinc-700" />
+                            <div className="h-4 w-full rounded bg-zinc-200 dark:bg-zinc-700" />
+                            <div className="h-4 w-5/6 rounded bg-zinc-200 dark:bg-zinc-700" />
+                            <div className="h-4 w-4/6 rounded bg-zinc-200 dark:bg-zinc-700" />
+                            {/* Action buttons */}
+                            <div className="flex gap-3 pt-2">
+                                {Array.from({ length: 4 }).map((_, i) => (
+                                    <div key={i} className="h-9 w-24 rounded-lg bg-zinc-200 dark:bg-zinc-700" />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export function EmptyState({ icon, title, subtitle, action }) {
+    return (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+            {/* Icon circle */}
+            <div className="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800
+                            flex items-center justify-center mb-4">
+                <span className="text-2xl">{icon}</span>
+            </div>
+            <h3 className="text-base font-semibold text-black dark:text-white mb-1">
+                {title}
+            </h3>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-xs">
+                {subtitle}
+            </p>
+            {action && (
+                <button
+                    onClick={action.onClick}
+                    className="mt-5 px-5 py-2 rounded-lg bg-black dark:bg-white
+                               text-white dark:text-black text-sm font-semibold
+                               hover:opacity-80 transition"
+                >
+                    {action.label}
+                </button>
+            )}
+        </div>
+    );
+}
+
+export function AuthDivider({ text = "or" }) {
+    return (
+        <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-3 text-muted-foreground tracking-wider">
+                    {text}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+// Custom hook for managing dropdown state with click-outside functionality.
+export function useClickOutsideDropdown() {
+    const [openDropdown, setOpenDropdown] = useState(null);
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (openDropdown && !event.target.closest('.status-dropdown-container')) {
+                setOpenDropdown(null);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [openDropdown]);
+
+    return [openDropdown, setOpenDropdown];
 }

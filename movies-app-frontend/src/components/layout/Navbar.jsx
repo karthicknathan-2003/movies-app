@@ -1,26 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { FaMoon, FaSun, FaBars, FaTimes, FaUserCircle } from "react-icons/fa";
-import { useAuth } from "./context/AuthContext";
+import { useAuth } from "../context/AuthContext";
 
 export function Navbar() {
-    const [dark, setDark] = useState(false);
+    const [dark, setDark] = useState(() => {
+        const savedTheme = localStorage.getItem("theme");
+        const isDark = savedTheme === "dark";
+        // Keep the DOM class in sync during the first render so the page does not flash.
+        document.documentElement.classList.toggle("dark", isDark);
+        return isDark;
+    });
     const [menuOpen, setMenuOpen] = useState(false);
 
     const { isAuthenticated } = useAuth();
 
-    useEffect(() => {
-        const saved = localStorage.getItem("theme");
-        if (saved === "dark") {
-            document.documentElement.classList.add("dark");
-            setDark(true);
-        }
-    }, []);
-
     const toggleTheme = () => {
-        document.documentElement.classList.toggle("dark");
-        localStorage.setItem("theme", dark ? "light" : "dark");
-        setDark(!dark);
+        const nextThemeIsDark = !dark;
+        document.documentElement.classList.toggle("dark", nextThemeIsDark);
+        localStorage.setItem("theme", nextThemeIsDark ? "dark" : "light");
+        setDark(nextThemeIsDark);
     };
 
     const linkClass = ({ isActive }) =>
@@ -38,9 +37,13 @@ export function Navbar() {
                     CineVault
                 </NavLink>
 
-                {/* Desktop Nav — single Catalog link */}
+                {/* Desktop Nav — Catalog and Browse */}
                 <nav className="hidden md:flex items-center gap-2">
                     <NavLink to="/catalog" className={linkClass}>Catalog</NavLink>
+                    <NavLink to="/search" className={linkClass}>Browse</NavLink>
+                    {isAuthenticated && (
+                        <NavLink to="/users" className={linkClass}>Users</NavLink>
+                    )}
                 </nav>
 
                 {/* Right Actions */}
@@ -85,10 +88,35 @@ export function Navbar() {
 
             {/* Mobile Menu */}
             {menuOpen && (
-                <div className="md:hidden px-6 pb-6 pt-4 bg-white/95 dark:bg-black/95 border-t border-black/10 dark:border-white/10 flex flex-col items-center gap-2">
-                    <NavLink to="/catalog" className={linkClass} onClick={() => setMenuOpen(false)}>
-                        Catalog
-                    </NavLink>
+                <div className="md:hidden px-6 pb-6 pt-4 bg-white/95 dark:bg-black/95
+                    border-t border-black/10 dark:border-white/10">
+
+                    {/* Direct sub-links so users skip the Catalog hub page */}
+                    <p className="text-[10px] uppercase font-semibold tracking-wider
+                      text-black/30 dark:text-white/30 mb-2">
+                        Browse
+                    </p>
+                    <div className="grid grid-cols-2 gap-1 mb-4">
+                        {[
+                            { to: "/movies", label: "Movies" },
+                            { to: "/series", label: "Series" },
+                            { to: "/anime", label: "Anime" },
+                            { to: "/celebrities", label: "Celebrities" },
+                            { to: "/franchises", label: "Franchises" },
+                            ...(isAuthenticated ? [{ to: "/users", label: "Users" }] : []),
+                        ].map(({ to, label }) => (
+                            <NavLink
+                                key={to}
+                                to={to}
+                                className={linkClass}
+                                onClick={() => setMenuOpen(false)}
+                            >
+                                {label}
+                            </NavLink>
+                        ))}
+                    </div>
+
+                    {/* Auth */}
                     {isAuthenticated ? (
                         <NavLink to="/profile" className={linkClass} onClick={() => setMenuOpen(false)}>
                             Profile
