@@ -25,7 +25,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/watchlist")
-@CrossOrigin(origins = "*")
 public class WatchListController {
 
     @Autowired

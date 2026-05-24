@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/tmdb/anime")
-@CrossOrigin(origins = "*")
 public class AnimeController {
 
     @Autowired

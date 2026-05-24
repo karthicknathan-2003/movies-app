@@ -20,7 +20,6 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/tmdb")
-@CrossOrigin(origins = "*")
 public class TmdbController {
 
     private final TmdbServices tmdbServices;

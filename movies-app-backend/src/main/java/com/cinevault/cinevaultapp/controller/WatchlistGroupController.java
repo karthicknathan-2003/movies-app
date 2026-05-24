@@ -24,7 +24,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/watchlist/groups")
-@CrossOrigin(origins = "*")
 public class WatchlistGroupController {
 
     @Autowired
