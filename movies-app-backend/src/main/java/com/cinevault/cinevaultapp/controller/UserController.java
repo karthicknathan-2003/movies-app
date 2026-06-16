@@ -1,9 +1,9 @@
 package com.cinevault.cinevaultapp.controller;
 
 import com.cinevault.cinevaultapp.dto.UserProfileDto;
+import com.cinevault.cinevaultapp.dto.UserActivityDto;
 import com.cinevault.cinevaultapp.dto.UserStatsDto;
 import com.cinevault.cinevaultapp.entity.UserEntity;
-import com.cinevault.cinevaultapp.security.JwtUtil;
 import com.cinevault.cinevaultapp.service.AuthServices;
 import com.cinevault.cinevaultapp.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,21 +32,17 @@ public class UserController {
 
     @Autowired
     private AuthServices authServices;
-
-    @Autowired
-    private JwtUtil jwtUtil;
-
     /**
      * Get all registered users except the current authenticated user.
      *
-     * @param token - JWT token from Authorization header (extracted via Spring
-     *              Security)
+     * @param authentication - current authenticated user when the cookie/header is present.
+     *
      * @return - List of all other users with their profiles
      */
     @GetMapping
     public ResponseEntity<List<UserProfileDto>> getAllUsers(
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        String username = extractUsernameFromToken(token);
+            Authentication authentication) {
+        String username = authentication != null ? authentication.getName() : null;
         List<UserProfileDto> users = userService.getAllUsers(username);
         return ResponseEntity.ok(users);
     }
@@ -56,6 +52,7 @@ public class UserController {
      *
      * @param authentication - The current authenticated user.
      * @param dto            - The profile values to update.
+     *
      * @return - The updated user profile.
      */
     @PutMapping("/profile")
@@ -69,6 +66,7 @@ public class UserController {
      * Get the profile of the currently authenticated user.
      *
      * @param authentication - The current authenticated user.
+     *
      * @return - The profile of the signed-in user.
      */
     @GetMapping("/me")
@@ -82,14 +80,15 @@ public class UserController {
      * Get a specific user by username.
      *
      * @param username - The username to retrieve
-     * @param token    - JWT token from Authorization header
+     * @param authentication - current authenticated user when available
+     *
      * @return - User profile information
      */
     @GetMapping("/{username}")
     public ResponseEntity<UserProfileDto> getUserByUsername(
             @PathVariable String username,
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        String currentUsername = extractUsernameFromToken(token);
+            Authentication authentication) {
+        String currentUsername = authentication != null ? authentication.getName() : null;
         UserProfileDto user = userService.getUserByUsername(username, currentUsername);
         return ResponseEntity.ok(user);
     }
@@ -98,6 +97,7 @@ public class UserController {
      * Get statistics for a specific user (followers, following).
      *
      * @param username - The username to get stats for
+     *
      * @return - User statistics
      */
     @GetMapping("/{username}/stats")
@@ -109,15 +109,16 @@ public class UserController {
     /**
      * Get list of followers for a specific user.
      *
-     * @param username - The username to get followers for
-     * @param token    - JWT token from Authorization header
-     * @return - List of users following the specified user
+     * @param username - The username to get followers for.
+     * @param authentication - current authenticated user when available.
+     *
+     * @return - List of users following the specified user.
      */
     @GetMapping("/{username}/followers")
     public ResponseEntity<List<UserProfileDto>> getFollowers(
             @PathVariable String username,
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        String currentUsername = extractUsernameFromToken(token);
+            Authentication authentication) {
+        String currentUsername = authentication != null ? authentication.getName() : null;
         List<UserProfileDto> followers = userService.getFollowers(username, currentUsername);
         return ResponseEntity.ok(followers);
     }
@@ -125,15 +126,16 @@ public class UserController {
     /**
      * Get list of users that a specific user is following.
      *
-     * @param username - The username to get following list for
-     * @param token    - JWT token from Authorization header
-     * @return - List of users being followed by the specified user
+     * @param username - The username to get following list for.
+     * @param authentication - current authenticated user when available.
+     *
+     * @return - List of users being followed by the specified user.
      */
     @GetMapping("/{username}/following")
     public ResponseEntity<List<UserProfileDto>> getFollowing(
             @PathVariable String username,
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        String currentUsername = extractUsernameFromToken(token);
+            Authentication authentication) {
+        String currentUsername = authentication != null ? authentication.getName() : null;
         List<UserProfileDto> following = userService.getFollowing(username, currentUsername);
         return ResponseEntity.ok(following);
     }
@@ -141,19 +143,16 @@ public class UserController {
     /**
      * Follow a specific user.
      *
-     * @param usernameToFollow - The username of the user to follow
-     * @param token            - JWT token from Authorization header
-     * @return - Success response
+     * @param usernameToFollow - The username of the user to follow.
+     * @param authentication   - the authenticated user from the resolved JWT.
+     *
+     * @return - Success response.
      */
     @PostMapping("/{usernameToFollow}/follow")
     public ResponseEntity<?> followUser(
             @PathVariable String usernameToFollow,
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        String currentUsername = extractUsernameFromToken(token);
-        if (currentUsername == null) {
-            return ResponseEntity.status(401).body("Unauthorized");
-        }
-        userService.followUser(currentUsername, usernameToFollow);
+            Authentication authentication) {
+        userService.followUser(authentication.getName(), usernameToFollow);
         return ResponseEntity.ok("Successfully followed user");
     }
 
@@ -161,37 +160,27 @@ public class UserController {
      * Unfollow a specific user.
      *
      * @param usernameToUnfollow - The username of the user to unfollow
-     * @param token              - JWT token from Authorization header
+     * @param authentication     - the authenticated user from the resolved JWT
+     *
      * @return - Success response
      */
     @DeleteMapping("/{usernameToUnfollow}/follow")
     public ResponseEntity<?> unfollowUser(
             @PathVariable String usernameToUnfollow,
-            @RequestHeader(value = "Authorization", required = false) String token) {
-        String currentUsername = extractUsernameFromToken(token);
-        if (currentUsername == null) {
-            return ResponseEntity.status(401).body("Unauthorized");
-        }
-        userService.unfollowUser(currentUsername, usernameToUnfollow);
+            Authentication authentication) {
+        userService.unfollowUser(authentication.getName(), usernameToUnfollow);
         return ResponseEntity.ok("Successfully unfollowed user");
     }
 
     /**
-     * Extract username from JWT token.
-     * Removes "Bearer " prefix and extracts the username claim from the token.
+     * Returns the signed-in user's own profile activity feed.
      *
-     * @param token - The Authorization header value
-     * @return - The username from the token, or null if token is invalid/missing
+     * @param authentication - The current authenticated user.
+     *
+     * @return - Reverse-chronological activity rows for the profile page.
      */
-    private String extractUsernameFromToken(String token) {
-        if (token == null || !token.startsWith("Bearer ")) {
-            return null;
-        }
-        try {
-            String jwt = token.substring(7);
-            return jwtUtil.extractUsername(jwt);
-        } catch (Exception e) {
-            return null;
-        }
+    @GetMapping("/me/activity")
+    public ResponseEntity<List<UserActivityDto>> getMyActivity(Authentication authentication) {
+        return ResponseEntity.ok(userService.getMyActivity(authentication.getName()));
     }
 }

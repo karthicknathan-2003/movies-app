@@ -10,6 +10,8 @@ import java.util.Optional;
 
 /**
  * JPA repository for {@link WatchListEntity}.
+ * Provides query methods for locating watchlist items by owner, title, and
+ * optional watchlist group so the service layer can keep grouped copies in sync.
  *
  * @author karthicknathan
  * @since Feb 04, 2026
@@ -58,4 +60,15 @@ public interface IWatchListRepository extends JpaRepository<WatchListEntity, Lon
      */
     Optional<WatchListEntity> findByUserEntityAndMovieIdAndWatchlistGroup(
             UserEntity user, Long movieId, WatchlistGroupEntity group);
+
+    /**
+     * Retrieves every watchlist copy of a media item owned by the same user.
+     * This keeps shared fields like status and rating in sync across groups.
+     *
+     * @param user    - The owner {@link UserEntity}.
+     * @param movieId - The TMDB ID of the media item.
+     *
+     * @return - List of matching watchlist rows.
+     */
+    List<WatchListEntity> findAllByUserEntityAndMovieId(UserEntity user, Long movieId);
 }

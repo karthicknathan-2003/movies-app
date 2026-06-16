@@ -767,4 +767,27 @@ public class TmdbServices {
                 .retryWhen(Retry.fixedDelay(1, Duration.ofSeconds(1)))
                 .block();
     }
+
+    /**
+     * Retrieves similar titles for a movie or TV show.
+     * The response shape matches other paged TMDB lists so the frontend can reuse card rows.
+     *
+     * @param type - The source media type.
+     * @param id - The source media identifier.
+     * @param page - The page number for pagination.
+     *
+     * @return - A {@code PagedResponseDto} with similar titles.
+     */
+    @Cacheable(value = "similarTitles", key = "#type + '-' + #id + '-' + #page")
+    public PagedResponseDto<MovieDto> getSimilarTitles(MediaTypeEnum type, Long id, int page) {
+        return webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/" + type.path() + "/{id}/similar")
+                        .queryParam("api_key", apiKey)
+                        .queryParam("page", page)
+                        .build(id))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<PagedResponseDto<MovieDto>>() {})
+                .block();
+    }
 }

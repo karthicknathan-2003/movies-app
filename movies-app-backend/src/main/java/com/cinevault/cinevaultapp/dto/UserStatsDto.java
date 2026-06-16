@@ -28,4 +28,19 @@ public class UserStatsDto {
     private Integer following;
 
     private Integer watchlistGroupCount;
+
+    /**
+     * Aggregated watch-status counts across the user's saved media.
+     */
+    private Integer plannedCount;
+    private Integer inProgressCount;
+    private Integer completedCount;
+    private Integer droppedCount;
+
+    /**
+     * Estimated watch-time summary built from movie runtimes and watched episodes.
+     */
+    private Integer totalWatchMinutes;
+    private Integer watchedEpisodeCount;
+    private Integer trackedMediaCount;
 }

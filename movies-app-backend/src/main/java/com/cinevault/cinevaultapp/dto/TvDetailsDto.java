@@ -58,4 +58,10 @@ public class TvDetailsDto {
     private int number_of_seasons;
 
     private int number_of_episodes;
+
+    /**
+     * The typical episode runtime in minutes.
+     * The frontend uses this as a fallback when individual episode runtimes are missing.
+     */
+    private List<Integer> episode_run_time;
 }

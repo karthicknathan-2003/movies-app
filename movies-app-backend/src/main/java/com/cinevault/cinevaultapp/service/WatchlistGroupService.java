@@ -159,6 +159,7 @@ public class WatchlistGroupService {
                             media.getBackdrop_path(),
                             w.getMediaType(),
                             w.getWatchStatus(),
+                            w.getPersonalRating(),
                             getGenreNames(media)
                     );
                 })

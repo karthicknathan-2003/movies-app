@@ -4,7 +4,8 @@ import lombok.Data;
 
 /**
  * Data Transfer Object for authentication responses.
- * Contains the username and JWT token returned after successful login.
+ * Contains the user identity returned after successful login.
+ * The JWT itself is now sent in an HttpOnly cookie instead of browser-readable storage.
  *
  * @author karthicknathan
  * @since Feb 04, 2026
@@ -22,7 +23,8 @@ public class AuthResponseDto {
     private String fullName;
 
     /**
-     * The JWT token for subsequent authenticated requests.
+     * The JWT token field is intentionally optional because authenticated browser
+     * flows now use the HttpOnly cookie instead of exposing the token to JavaScript.
      */
     private String token;
 }

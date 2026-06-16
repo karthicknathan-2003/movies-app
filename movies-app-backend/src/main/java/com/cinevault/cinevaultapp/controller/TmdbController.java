@@ -155,7 +155,6 @@ public class TmdbController {
     public CreditsDto getCredits(@RequestParam MediaTypeEnum type, @RequestParam Long id) {
         return tmdbServices.getCredits(type, id);
     }
-
     /**
      * Retrieves detailed information for a specific person.
      *
@@ -190,6 +189,7 @@ public class TmdbController {
      * @param mediaTypePath - "movie" or "tv" from the URL path variable.
      * @param id            - The unique identifier of the media item.
      * @param page          - The page number for pagination (defaults to 1).
+     *
      * @return              - A ReviewsDto containing paginated reviews.
      */
     @GetMapping("/{mediaType}/{id}/reviews")
@@ -249,5 +249,21 @@ public class TmdbController {
             throw new IllegalArgumentException("Invalid mediaType: " + mediaType);
         }
         return tmdbServices.getWatchProviders(mediaType, id);
+    }
+
+    /**
+     * Retrieves similar titles for a movie or TV show.
+     *
+     * @param type - The {@code MediaTypeEnum} indicating movie or TV show.
+     * @param id - The unique identifier of the media item.
+     * @param page - The page number for pagination (defaults to 1).
+     *
+     * @return - A {@code PagedResponseDto} containing related titles.
+     */
+    @GetMapping("/similar")
+    public PagedResponseDto<MovieDto> getSimilarTitles(@RequestParam MediaTypeEnum type,
+                                                       @RequestParam Long id,
+                                                       @RequestParam(defaultValue = "1") int page) {
+        return tmdbServices.getSimilarTitles(type, id, page);
     }
 }

@@ -54,6 +54,11 @@ public class WatchListDto {
     private WatchStatusEnum status;
 
     /**
+     * Personal star rating saved by the user on a 1-5 scale.
+     */
+    private Integer personalRating;
+
+    /**
      * List of genre names associated with the media.
      */
     private List<String> genres;

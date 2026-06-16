@@ -1,5 +1,6 @@
 package com.cinevault.cinevaultapp.controller;
 
+import com.cinevault.cinevaultapp.dto.EpisodeProgressDto;
 import com.cinevault.cinevaultapp.dto.WatchListDto;
 import com.cinevault.cinevaultapp.dto.WatchlistStatusDto;
 import com.cinevault.cinevaultapp.enums.WatchStatusEnum;
@@ -7,7 +8,6 @@ import com.cinevault.cinevaultapp.service.WatchListServices;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -97,7 +97,7 @@ public class WatchListController {
     public WatchlistStatusDto getStatus(
             Authentication authentication,
             @PathVariable Long movieId,
-            @RequestParam(required = false) Long groupId) {  // ADD THIS
+            @RequestParam(required = false) Long groupId) {
         return watchListServices.getWatchlistStatus(authentication.getName(), movieId, groupId);
     }
 
@@ -126,5 +126,42 @@ public class WatchListController {
     public void updateFavorite(@PathVariable Long movieId, @RequestParam boolean favorite,
                                Authentication authentication) {
         watchListServices.updateFavorite(authentication.getName(), movieId, favorite);
+    }
+
+    /**
+     * Updates the personal 1-5 star rating of a saved title.
+     * Passing no value clears the current rating.
+     *
+     * @param movieId        - The unique identifier of the movie/show to update.
+     * @param personalRating - The new 1-5 star rating, or null to clear it.
+     * @param authentication - The authenticated user.
+     */
+    @PatchMapping("/{movieId}/rating")
+    public void updatePersonalRating(@PathVariable Long movieId,
+                                     @RequestParam(required = false) Integer personalRating,
+                                     Authentication authentication) {
+        watchListServices.updatePersonalRating(authentication.getName(), movieId, personalRating);
+    }
+
+    /**
+     * Returns watched-episode progress for a show/anime.
+     */
+    @GetMapping("/{movieId}/episodes/progress")
+    public List<EpisodeProgressDto> getEpisodeProgress(@PathVariable Long movieId,
+                                                       Authentication authentication) {
+        return watchListServices.getEpisodeProgress(authentication.getName(), movieId);
+    }
+
+    /**
+     * Creates or removes a watched-episode progress row.
+     */
+    @PutMapping("/{movieId}/episodes/progress")
+    public ResponseEntity<EpisodeProgressDto> updateEpisodeProgress(@PathVariable Long movieId,
+                                                                    @RequestBody EpisodeProgressDto dto,
+                                                                    Authentication authentication) {
+        EpisodeProgressDto updated = watchListServices.updateEpisodeProgress(
+                authentication.getName(), movieId, dto
+        );
+        return ResponseEntity.ok(updated);
     }
 }

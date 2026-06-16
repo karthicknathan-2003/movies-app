@@ -4,6 +4,8 @@ import com.cinevault.cinevaultapp.enums.WatchStatusEnum;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
  * Entity class representing a watchlist item in the database.
  * Stores information about movies or TV shows that users have added to their watchlist.
@@ -71,4 +73,33 @@ public class WatchListEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "watchlist_group_id")
     private WatchlistGroupEntity watchlistGroup;
+
+    /**
+     * Personal star rating saved by the user on a simple 1-5 scale.
+     * Null means the user has not rated the title yet.
+     */
+    private Integer personalRating;
+
+    /**
+     * Timestamp when the title was first added to the user's library.
+     */
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+    /**
+     * Timestamp when the entry was last changed, including ratings and status updates.
+     */
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    public void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

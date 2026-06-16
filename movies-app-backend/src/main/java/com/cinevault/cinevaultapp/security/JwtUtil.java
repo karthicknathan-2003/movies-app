@@ -4,10 +4,12 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.time.Duration;
 import java.util.Date;
 import java.util.logging.Logger;
 
@@ -24,6 +26,9 @@ import java.util.logging.Logger;
 @Component
 public class JwtUtil {
     private static final Logger LOGGER = Logger.getLogger(JwtUtil.class.getName());
+
+    // Used in several other places. So, keeping the visibility as public.
+    public static final String AUTH_COOKIE_NAME = "cine_vault_token";
 
     @Value("${jwt.secret}")
     private String secret;
@@ -81,6 +86,7 @@ public class JwtUtil {
      * Validates the JWT token by verifying its signature and expiration.
      *
      * @param token - The JWT token string to validate.
+     *
      * @return - True if the token is valid, false otherwise.
      *
      * @throws io.jsonwebtoken.ExpiredJwtException - If the token has expired (re-thrown for filter handling).
@@ -99,6 +105,43 @@ public class JwtUtil {
             LOGGER.fine(() -> "JWT validation failed due to invalid token format/signature");
             return false;
         }
+    }
+
+    /**
+     * Creates the HttpOnly cookie that carries the JWT for authenticated requests.
+     *
+     * @param token - signed JWT token for the logged-in user.
+     * @param secureRequest - mirrors whether the current request uses HTTPS.
+     *
+     * @return - serialized Set-Cookie header value.
+     */
+    public String createAuthCookie(String token, boolean secureRequest) {
+        return ResponseCookie.from(AUTH_COOKIE_NAME, token)
+                .httpOnly(true)
+                .secure(secureRequest)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(Duration.ofMillis(expiration))
+                .build()
+                .toString();
+    }
+
+    /**
+     * Clears the auth cookie during logout or forced session reset.
+     *
+     * @param secureRequest - mirrors whether the current request uses HTTPS.
+     *
+     * @return - serialized Set-Cookie header value that expires the cookie immediately.
+     */
+    public String clearAuthCookie(boolean secureRequest) {
+        return ResponseCookie.from(AUTH_COOKIE_NAME, "")
+                .httpOnly(true)
+                .secure(secureRequest)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(Duration.ZERO)
+                .build()
+                .toString();
     }
 
     /*

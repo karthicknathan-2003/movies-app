@@ -2,6 +2,7 @@ package com.cinevault.cinevaultapp.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import com.cinevault.cinevaultapp.enums.WatchStatusEnum;
 
 /**
  * Data Transfer Object for watchlist status information.
@@ -24,4 +25,14 @@ public class WatchlistStatusDto {
      * Indicates whether the media item is marked as a favorite.
      */
     private boolean isFavorite;
+
+    /**
+     * The current watch status if the title exists in the user's watchlist.
+     */
+    private WatchStatusEnum status;
+
+    /**
+     * Personal star rating saved by the user on a 1-5 scale.
+     */
+    private Integer personalRating;
 }

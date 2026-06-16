@@ -42,4 +42,11 @@ public class EpisodeDto {
      * The average user rating of the episode.
      */
     private Double vote_average;
+
+    /**
+     * The runtime of the episode in minutes.
+     * TMDB can provide this per episode, and the frontend uses it before
+     * falling back to the parent show's default runtime.
+     */
+    private Integer runtime;
 }

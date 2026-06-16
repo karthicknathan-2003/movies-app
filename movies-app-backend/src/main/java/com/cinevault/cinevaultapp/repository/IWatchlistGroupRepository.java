@@ -11,7 +11,8 @@ import java.util.Optional;
 
 /**
  * JPA repository for {@link WatchlistGroupEntity}.
- * Provides query methods for watchlist group management.
+ * Provides query methods for loading user-owned watchlist groups and
+ * aggregate information derived from those groups.
  *
  * @author karthicknathan
  * @since Mar 2026
@@ -42,12 +43,11 @@ public interface IWatchlistGroupRepository extends JpaRepository<WatchlistGroupE
 
     /**
      * Returns the total number of watchlist groups created by a user.
+     * The custom JPQL query uses the entity field name {@code userEntity}
+     * to count only the groups owned by the supplied user id.
      *
-     * Since your entity field is named 'userEntity',
-     * JPQL must use that exact property name.
-     *
-     * @param userId the user ID
-     * @return total watchlist group count
+     * @param userId - Identifier of the user whose groups should be counted.
+     * @return - Total number of watchlist groups owned by the user.
      */
     @Query("""
        SELECT COUNT(wg)

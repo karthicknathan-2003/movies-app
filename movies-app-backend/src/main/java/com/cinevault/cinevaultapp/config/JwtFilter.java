@@ -3,6 +3,7 @@ package com.cinevault.cinevaultapp.config;
 import com.cinevault.cinevaultapp.security.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,9 +49,8 @@ public class JwtFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+        String token = resolveToken(request);
+        if (token != null && !token.isBlank()) {
             try {
                 if (jwtUtil.validateToken(token)) {
                     String username = jwtUtil.extractUsername(token);
@@ -80,5 +80,30 @@ public class JwtFilter extends OncePerRequestFilter {
         }
         // Continue with remaining filters regardless of public/authenticated route.
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Supports both the new HttpOnly cookie flow and the old Authorization header flow.
+     * The header fallback keeps existing clients working during the transition.
+     *
+     * @param request - incoming request to inspect.
+     *
+     * @return - resolved JWT token or null when no token was supplied.
+     */
+    private String resolveToken(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if (JwtUtil.AUTH_COOKIE_NAME.equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        return null;
     }
 }

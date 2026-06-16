@@ -2,11 +2,12 @@ package com.cinevault.cinevaultapp.controller;
 
 import com.cinevault.cinevaultapp.dto.AuthRequestDto;
 import com.cinevault.cinevaultapp.dto.AuthResponseDto;
-import com.cinevault.cinevaultapp.dto.UserProfileDto;
+import com.cinevault.cinevaultapp.security.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import com.cinevault.cinevaultapp.service.AuthServices;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -24,6 +25,9 @@ public class AuthController {
 
     @Autowired
     private AuthServices authService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     /**
      * Registers a new user in the system.
@@ -46,8 +50,14 @@ public class AuthController {
      * @return - An {@code AuthResponseDto} containing the username and JWT token.
      */
     @PostMapping("/login")
-    public AuthResponseDto login(@RequestBody AuthRequestDto dto) {
-        return authService.login(dto);
+    public ResponseEntity<AuthResponseDto> login(@RequestBody AuthRequestDto dto,
+                                                 HttpServletRequest request) {
+        AuthResponseDto response = authService.login(dto);
+        return ResponseEntity.ok()
+                // The JWT now travels in an HttpOnly cookie instead of browser-readable storage.
+                .header(HttpHeaders.SET_COOKIE,
+                        jwtUtil.createAuthCookie(response.getToken(), request.isSecure()))
+                .body(new AuthResponseDto(response.getUserName(), response.getFullName(), null));
     }
 
     /**
@@ -57,8 +67,24 @@ public class AuthController {
      * @return - {@code AuthResponseDto} with the userName and app JWT.
      */
     @PostMapping("/google")
-    public ResponseEntity<AuthResponseDto> googleLogin(@RequestBody AuthRequestDto request) {
+    public ResponseEntity<AuthResponseDto> googleLogin(@RequestBody AuthRequestDto request,
+                                                       HttpServletRequest httpRequest) {
         AuthResponseDto response = authService.authenticateWithGoogle(request.getCredential());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE,
+                        jwtUtil.createAuthCookie(response.getToken(), httpRequest.isSecure()))
+                .body(new AuthResponseDto(response.getUserName(), response.getFullName(), null));
+    }
+
+    /**
+     * Clears the auth cookie so the browser no longer sends the JWT on later requests.
+     *
+     * @return - Empty success response after expiring the auth cookie.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, jwtUtil.clearAuthCookie(request.isSecure()))
+                .build();
     }
 }
