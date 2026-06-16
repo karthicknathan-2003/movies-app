@@ -1,4 +1,4 @@
-import { Route, Routes, useNavigate } from "react-router-dom";
+import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./style.css";
 import { Navbar } from "./components/layout/Navbar";
 
@@ -31,6 +31,20 @@ import BottomNav from "./components/layout/BottomNav";
 import Franchises from "./pages/Franchises";
 import RegisterCard from "./components/RegisterCard";
 import Discover from "./pages/Discover";
+import BackToTopButton from "./components/BackToTopButton";
+import Settings from "./pages/Settings";
+import { AppSettingsProvider } from "./components/context/AppSettingsContext";
+
+function ScrollToTopOnRouteChange() {
+    const { pathname, search } = useLocation();
+
+    useEffect(() => {
+        // Reset scroll on navigation so each page opens from the top instead of inheriting the last scroll position.
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }, [pathname, search]);
+
+    return null;
+}
 
 function App() {
     const navigate = useNavigate();
@@ -42,47 +56,52 @@ function App() {
     }, [navigate]);
 
     return (
-        <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white">
-            <Toaster richColors position="top-center" />
-            <Navbar />
-            <main className="flex-1">
-                <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/catalog" element={<Catalog />} />
-                    <Route path="/search" element={<Search />} />
-                    <Route path="/discover" element={<Discover />} />
+        <AppSettingsProvider>
+            <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white">
+                <ScrollToTopOnRouteChange />
+                <Toaster richColors position="top-center" />
+                <Navbar />
+                <main className="flex-1">
+                    <Routes>
+                        <Route path="/" element={<Home />} />
+                        <Route path="/catalog" element={<Catalog />} />
+                        <Route path="/search" element={<Search />} />
+                        <Route path="/discover" element={<Discover />} />
+                        <Route path="/settings" element={<Settings />} />
 
-                    <Route path="/login" element={<LoginCard />} />
-                    <Route path="/signup" element={<RegisterCard />} />
+                        <Route path="/login" element={<LoginCard />} />
+                        <Route path="/signup" element={<RegisterCard />} />
 
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/profile/watchlist/:groupId" element={<Watchlist />} />
-                    <Route path="/profile/favorites" element={<Favorites />} />
+                        <Route path="/profile" element={<Profile />} />
+                        <Route path="/profile/watchlist/:groupId" element={<Watchlist />} />
+                        <Route path="/profile/favorites" element={<Favorites />} />
 
-                    {/* Users routes */}
-                    <Route path="/users" element={<Users />} />
-                    <Route path="/users/:username" element={<UserProfile />} />
-                    <Route path="/users/:username/:type" element={<Users />} />
+                        {/* Users routes */}
+                        <Route path="/users" element={<Users />} />
+                        <Route path="/users/:username" element={<UserProfile />} />
+                        <Route path="/users/:username/:type" element={<Users />} />
 
-                    <Route path="/movies" element={<Movies />} />
-                    <Route path="/movies/:id" element={<MovieDetails />} />
+                        <Route path="/movies" element={<Movies />} />
+                        <Route path="/movies/:id" element={<MovieDetails />} />
 
-                    <Route path="/series" element={<Series />} />
-                    <Route path="/series/:id" element={<SeriesDetails />} />
+                        <Route path="/series" element={<Series />} />
+                        <Route path="/series/:id" element={<SeriesDetails />} />
 
-                    <Route path="/celebrities" element={<Celebrities />} />
-                    <Route path="/celebrities/:id" element={<PersonDetails />} />
+                        <Route path="/celebrities" element={<Celebrities />} />
+                        <Route path="/celebrities/:id" element={<PersonDetails />} />
 
-                    <Route path="/anime" element={<Anime />} />
-                    <Route path="/anime/:id" element={<AnimeDetails />} />
+                        <Route path="/anime" element={<Anime />} />
+                        <Route path="/anime/:id" element={<AnimeDetails />} />
 
-                    <Route path="/franchises" element={<Franchises />} />
-                    <Route path="/franchises/:id" element={<Franchises />} />
-                </Routes>
-            </main>
-            <BottomNav />
-            <Footer />
-        </div>
+                        <Route path="/franchises" element={<Franchises />} />
+                        <Route path="/franchises/:id" element={<Franchises />} />
+                    </Routes>
+                </main>
+                <BackToTopButton />
+                <BottomNav />
+                <Footer />
+            </div>
+        </AppSettingsProvider>
     );
 }
 

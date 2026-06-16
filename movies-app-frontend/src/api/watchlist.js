@@ -1,24 +1,17 @@
 import axios from "axios";
 import { navigationRef } from "../utils/navigation";
-import { clearStoredSession, readToken, saveRedirectAfterLogin } from "@/utils/authSession";
+import {
+  clearStoredSession,
+  saveRedirectAfterLogin,
+} from "@/utils/authSession";
+import { toast } from "sonner";
 
 // Base Axios instance for all watchlist-related requests through the backend.
 // Centralizing this means the base URL only needs to be changed in one place.
 export const watchlistApi = axios.create({
-  baseURL: import.meta.env.VITE_WATCHLIST_API_URL || "http://localhost:8080/api/watchlist",
-});
-
-// Attach the JWT token to every outgoing watchlist request if one exists in localStorage.
-// Explicitly deletes the header when no token is present to prevent stale values
-// from persisting across requests if the user logs out mid-session.
-watchlistApi.interceptors.request.use((config) => {
-  const token = readToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  } else {
-    delete config.headers.Authorization;
-  }
-  return config;
+  baseURL: import.meta.env.VITE_WATCHLIST_API_URL,
+  // Include the HttpOnly auth cookie on every watchlist request.
+  withCredentials: true,
 });
 
 // Global error handler for all watchlist requests.
@@ -35,10 +28,29 @@ watchlistApi.interceptors.response.use(
       const currentPath = window.location.pathname + window.location.search;
       saveRedirectAfterLogin(currentPath);
 
-      // Use navigationRef to avoid a full page reload — keeps the React tree intact.
+      // Surface the auth expiry instead of letting downstream callers fail quietly.
+      toast.error(
+        error.response?.data?.message ||
+          "Session expired. Please log in again.",
+      );
+
+      // Use navigationRef to avoid a full page reload.
       navigationRef.navigate?.("/login", { replace: true });
     }
 
     return Promise.reject(error);
   },
 );
+
+// Episode progress helpers keep the per-episode API usage consistent across detail pages.
+export const getEpisodeProgress = (movieId) =>
+  watchlistApi.get(`/${movieId}/episodes/progress`);
+
+export const updateEpisodeProgress = (movieId, payload) =>
+  watchlistApi.put(`/${movieId}/episodes/progress`, payload);
+
+// Personal star rating lives on the same watchlist record as favorite and watch status.
+export const updatePersonalRating = (movieId, personalRating) =>
+  watchlistApi.patch(`/${movieId}/rating`, null, {
+    params: personalRating == null ? {} : { personalRating },
+  });

@@ -1,571 +1,673 @@
-import React, {
-  useEffect, useState, useCallback, useRef,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { tmdb } from "@/api/tmdb";
-import {
-  FaStar, FaHeart, FaRegHeart, FaFlag,
-} from "react-icons/fa";
+import { FaEdit, FaHeart, FaRegHeart, FaStar, FaTrash } from "react-icons/fa";
 import { FiMessageSquare } from "react-icons/fi";
 import Pagination from "@/components/Pagination";
-
 import { useAuth } from "@/components/context/AuthContext";
-import { Avatar, cleanContent, formatDate, getRatingColor, ReviewSkeleton } from "@/utils/reviewHelper";
+import { createMediaReview, deleteReview, getMediaReviews, toggleReviewLike, updateReview } from "@/api/reviews";
+import { Avatar, formatDate, getRatingColor, ReviewSkeleton } from "@/utils/reviewHelper";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 const PAGE_SIZE = 6;
 const COLLAPSED_LINES = 4;
 
 const SORT_OPTS = [
-  { value: "highest", label: "Best" },
-  { value: "newest", label: "Newest" },
-  { value: "lowest", label: "Oldest" },
+    { value: "highest", label: "Best" },
+    { value: "newest", label: "Newest" },
+    { value: "oldest", label: "Oldest" },
 ];
 
-/* ReplyBox — inline textarea that appears under
-   a comment when the user clicks Reply. */
-function ReplyBox({ replyingTo, onCancel, onSubmit }) {
-  const [text, setText] = useState("");
-  const ref = useRef(null);
+const normalizeMediaType = (mediaType) => {
+    if (mediaType === "MOVIE") return "movie";
+    if (mediaType === "ANIME") return "anime";
+    return "tv";
+};
 
-  // Auto-focus the textarea as soon as the box appears.
-  useEffect(() => { ref.current?.focus(); }, []);
-
-  const handleSubmit = () => {
-    if (!text.trim()) return;
-    // In a real system, POST to your backend here.
-    // TMDB API is read-only so we just call onSubmit with the text
-    // so the parent can show an optimistic local reply.
-    onSubmit(text.trim());
-    setText("");
-  };
-
-  // Allow Escape to cancel and Ctrl+Enter to submit.
-  const handleKey = (e) => {
-    if (e.key === "Escape") onCancel();
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") handleSubmit();
-  };
-
-  return (
-    <div className="mt-3 ml-12 rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
-      <textarea
-        ref={ref}
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={handleKey}
-        placeholder={`Reply to ${replyingTo}...`}
-        rows={3}
-        className="w-full px-4 py-3 text-sm bg-transparent text-black dark:text-white
-                           placeholder:text-zinc-400 dark:placeholder:text-zinc-500
-                           resize-none outline-none"
-      />
-      {/* Footer bar — matches the dark strip in the screenshot */}
-      <div className="flex items-center justify-end gap-2 px-3 py-2
-                            bg-zinc-100 dark:bg-zinc-800 border-t
-                            border-zinc-200 dark:border-zinc-700">
-        <button
-          onClick={onCancel}
-          className="px-4 py-1.5 rounded-lg text-xs font-semibold
-                               border border-zinc-300 dark:border-zinc-600
-                               text-black dark:text-white
-                               hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
-          disabled={!text.trim()}
-          className="px-4 py-1.5 rounded-lg text-xs font-semibold
-                               bg-zinc-800 dark:bg-zinc-200
-                               text-white dark:text-black
-                               hover:bg-black dark:hover:bg-white transition-colors
-                               disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Reply
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* CommentInput — top-level comment box */
-function CommentInput({ username }) {
-  const [text, setText] = useState("");
-  const [focused, setFocused] = useState(false);
-
-  const handleKey = (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      // Would POST to backend — TMDB API is read-only.
+const updateReviewTree = (reviews, reviewId, updater) => reviews.map((review) => {
+    if (review.id === reviewId) {
+        return updater(review);
     }
-  };
 
-  return (
-    <div className="mb-6">
-      {username && (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
-          Comment as{" "}
-          <span className="font-semibold text-black dark:text-white">
-            {username}
-          </span>
-        </p>
-      )}
-      <div className={`rounded-xl border overflow-hidden transition-colors duration-150
-                ${focused
-          ? "border-zinc-400 dark:border-zinc-500"
-          : "border-zinc-200 dark:border-zinc-700"
-        }`}
-      >
-        <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          onKeyDown={handleKey}
-          placeholder="What are your thoughts?"
-          rows={4}
-          className="w-full px-4 py-3 text-sm bg-white dark:bg-zinc-900
-                               text-black dark:text-white placeholder:text-zinc-400
-                               dark:placeholder:text-zinc-500 resize-none outline-none"
-        />
-        {/* Footer bar with Comment button */}
-        <div className="flex items-center justify-end px-3 py-2
-                                bg-zinc-100 dark:bg-zinc-800 border-t
-                                border-zinc-200 dark:border-zinc-700">
-          <button
-            disabled={!text.trim()}
-            className="px-4 py-1.5 rounded-lg text-xs font-semibold
-                                   bg-zinc-800 dark:bg-zinc-200
-                                   text-white dark:text-black
-                                   hover:bg-black dark:hover:bg-white transition-colors
-                                   disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Comment
-          </button>
+    if (!review.replies?.length) {
+        return review;
+    }
+
+    return {
+        ...review,
+        replies: updateReviewTree(review.replies, reviewId, updater),
+    };
+});
+
+function ReviewComposer({
+    username,
+    submitting,
+    onSubmit,
+    onCancel,
+    placeholder,
+    submitLabel,
+    showRating = false,
+    compact = false,
+}) {
+    const [text, setText] = useState("");
+    const [rating, setRating] = useState(8);
+    const textareaRef = useRef(null);
+
+    useEffect(() => {
+        if (compact) {
+            textareaRef.current?.focus();
+        }
+    }, [compact]);
+
+    const handleSubmit = () => {
+        const trimmed = text.trim();
+        if (!trimmed || submitting) return;
+
+        onSubmit({
+            content: trimmed,
+            rating: showRating ? rating : null,
+        });
+        setText("");
+        setRating(8);
+    };
+
+    const handleKeyDown = (event) => {
+        if (event.key === "Escape" && onCancel) {
+            onCancel();
+        }
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+            handleSubmit();
+        }
+    };
+
+    return (
+        <div className={`rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 ${compact ? "p-3" : "p-4 sm:p-5"}`}>
+            {username && (
+                <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                    Posting as <span className="font-semibold text-black dark:text-white">{username}</span>
+                </p>
+            )}
+
+            <textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={compact ? 3 : 4}
+                placeholder={placeholder}
+                className="w-full resize-none rounded-xl border border-zinc-200 bg-transparent px-3 py-3 text-sm text-black outline-none transition focus:border-zinc-400 dark:border-zinc-700 dark:text-white dark:focus:border-zinc-500"
+            />
+
+            <div className={`mt-3 flex ${compact ? "flex-col gap-3" : "flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"}`}>
+                {showRating ? (
+                    <label className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                        Rating
+                        <select
+                            value={rating}
+                            onChange={(event) => setRating(Number(event.target.value))}
+                            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-white"
+                        >
+                            {Array.from({ length: 10 }).map((_, index) => (
+                                <option key={index + 1} value={index + 1}>
+                                    {index + 1}/10
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                ) : (
+                    <div className="text-xs text-zinc-400 dark:text-zinc-500">
+                        Replies keep the thread focused, so they do not carry a separate rating.
+                    </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    {onCancel && (
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                            Cancel
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={!text.trim() || submitting}
+                        className="rounded-lg bg-black px-4 py-2 text-xs font-semibold text-white transition hover:bg-black/85 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/85"
+                    >
+                        {submitting ? "Saving..." : submitLabel}
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
-/* ReviewCard */
-function ReviewCard({ review }) {
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(
-    review.author_details?.rating
-      ? Math.floor(review.author_details.rating / 2) // visual placeholder
-      : 0
-  );
-  // replyingOpen tracks whether the inline ReplyBox is visible for this card.
-  const [replyingOpen, setReplyingOpen] = useState(false);
-  // localReplies holds optimistic replies added while on the page.
-  // They are not persisted — TMDB API is read-only.
-  const [localReplies, setLocalReplies] = useState([]);
-  const contentRef = useRef(null);
+function EditReviewDialog({ review, open, saving, onOpenChange, onSave }) {
+    const [text, setText] = useState("");
+    const [rating, setRating] = useState(8);
+    const isReply = review?.parentReviewId != null;
 
-  const content = cleanContent(review.content);
-  const rating = review.author_details?.rating;
-  const avatar = review.author_details?.avatar_path;
-  const author = (review.author || review.author_details?.username || "Anonymous")
-    .replace(/^@/, "");
-  const isEdited = review.updated_at && review.updated_at !== review.created_at;
+    useEffect(() => {
+        if (!review) return;
+        setText(review.content || "");
+        setRating(review.rating || 8);
+    }, [review]);
 
-  useEffect(() => {
-    const el = contentRef.current;
-    if (!el) return;
-    const lh = parseFloat(getComputedStyle(el).lineHeight) || 20;
-    setOverflows(el.scrollHeight > lh * COLLAPSED_LINES + 4);
-  }, [content]);
+    const handleSave = () => {
+        if (!review || !text.trim()) return;
+        onSave({
+            content: text.trim(),
+            rating: isReply ? null : rating,
+        });
+    };
 
-  const handleLike = () => {
-    setLikeCount(n => liked ? n - 1 : n + 1);
-    setLiked(v => !v);
-  };
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>{isReply ? "Edit Reply" : "Edit Review"}</DialogTitle>
+                </DialogHeader>
 
-  /* Add an optimistic reply locally.
-     In a full implementation, POST to your backend first,
-     then append the returned review object. */
-  const handleReplySubmit = (text) => {
-    setLocalReplies(prev => [
-      ...prev,
-      {
-        id: `local-${Date.now()}`,
-        author: "You",
-        content: text,
-        created_at: new Date().toISOString(),
-        author_details: { avatar_path: null, rating: null },
-      },
-    ]);
-    setReplyingOpen(false);
-  };
+                <div className="space-y-4">
+                    <Textarea
+                        value={text}
+                        onChange={(event) => setText(event.target.value)}
+                        rows={6}
+                        placeholder={isReply ? "Update your reply..." : "Update your review..."}
+                        className="min-h-[150px] resize-none"
+                    />
 
-  return (
-    <div className="flex gap-3">
-      {/* Left column — avatar + vertical thread line */}
-      <div className="flex flex-col items-center flex-shrink-0">
-        <Avatar avatarPath={avatar} username={author} size="md" />
-        {/* Thread line — only shown when there are replies or the ReplyBox is open */}
-        {(replyingOpen || localReplies.length > 0) && (
-          <div className="flex-1 w-px bg-zinc-200 dark:bg-zinc-700 mt-1 min-h-[8px]" />
-        )}
-      </div>
+                    {!isReply && (
+                        <label className="flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                            Rating
+                            <select
+                                value={rating}
+                                onChange={(event) => setRating(Number(event.target.value))}
+                                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm text-black outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-white"
+                            >
+                                {Array.from({ length: 10 }).map((_, index) => (
+                                    <option key={index + 1} value={index + 1}>
+                                        {index + 1}/10
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
 
-      {/* Right column — everything else */}
-      <div className="flex-1 min-w-0 pb-4">
-        {/* Username + timestamp + edited + rating pill */}
-        <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 mb-1">
-          <span className="text-sm font-bold text-black dark:text-white">
-            {author}
-          </span>
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">
-            · {formatDate(review.created_at)}
-          </span>
-          {isEdited && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 italic">
-              · edited
-            </span>
-          )}
-          {rating != null && (
-            <span className={`ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md
-                                          flex items-center gap-0.5 ${getRatingColor(rating)}`}>
-              <FaStar size={8} />
-              {rating.toFixed(1)}
-            </span>
-          )}
-        </div>
-
-        {/* Review text */}
-        <p
-          ref={contentRef}
-          className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-line"
-          style={!expanded ? {
-            WebkitLineClamp: COLLAPSED_LINES,
-            display: "-webkit-box",
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          } : {}}
-        >
-          {content}
-        </p>
-
-        {overflows && (
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="mt-1 text-xs font-semibold text-zinc-400 dark:text-zinc-500
-                                   hover:text-black dark:hover:text-white transition-colors"
-          >
-            {expanded ? "Show less" : "Read more"}
-          </button>
-        )}
-
-        {/* Action row */}
-        <div className="flex items-center gap-4 mt-2">
-          {/* Like */}
-          <button
-            onClick={handleLike}
-            className={`flex items-center gap-1.5 text-xs font-medium transition-colors
-                            ${liked
-                ? "text-rose-500"
-                : "text-zinc-400 dark:text-zinc-500 hover:text-rose-500"
-              }`}
-          >
-            {liked ? <FaHeart size={12} /> : <FaRegHeart size={12} />}
-            {likeCount > 0 && <span>{likeCount}</span>}
-            <span>Like</span>
-          </button>
-
-          {/* Reply — toggles the inline ReplyBox */}
-          <button
-            onClick={() => setReplyingOpen(v => !v)}
-            className={`flex items-center gap-1.5 text-xs font-medium transition-colors
-                            ${replyingOpen
-                ? "text-black dark:text-white"
-                : "text-zinc-400 dark:text-zinc-500 hover:text-black dark:hover:text-white"
-              }`}
-          >
-            <FiMessageSquare size={12} />
-            <span>Reply</span>
-          </button>
-
-          {/* Report */}
-          <button
-            className="flex items-center gap-1.5 text-xs font-medium
-                                   text-zinc-400 dark:text-zinc-500
-                                   hover:text-red-500 dark:hover:text-red-400 transition-colors"
-          >
-            <FaFlag size={10} />
-            <span>Report</span>
-          </button>
-        </div>
-
-        {/* Inline ReplyBox */}
-        {replyingOpen && (
-          <ReplyBox
-            replyingTo={author}
-            onCancel={() => setReplyingOpen(false)}
-            onSubmit={handleReplySubmit}
-          />
-        )}
-
-        {/* Nested local replies */}
-        {localReplies.length > 0 && (
-          <div className="mt-3 space-y-3">
-            {localReplies.map(reply => (
-              <NestedReply key={reply.id} reply={reply} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <button
+                            type="button"
+                            onClick={() => onOpenChange(false)}
+                            className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={!text.trim() || saving}
+                            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-black/85 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/85"
+                        >
+                            {saving ? "Saving..." : "Save Changes"}
+                        </button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
 }
 
-/* NestedReply — indented reply card. Kept separate from ReviewCard to stay simple —
-   replies don't need their own reply boxes. */
-function NestedReply({ reply }) {
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(0);
+function ReviewNode({
+    review,
+    depth = 0,
+    isAuthenticated,
+    pendingLikeId,
+    replyingToId,
+    pendingReplyParentId,
+    deletingReviewId,
+    onToggleLike,
+    onReplySubmit,
+    onReplyToggle,
+    onEditRequest,
+    onDelete,
+}) {
+    const [expanded, setExpanded] = useState(false);
+    const [overflows, setOverflows] = useState(false);
+    const contentRef = useRef(null);
+    const authorName = review.author?.fullName || review.author?.username || "Anonymous";
+    const handleReplyClick = () => {
+        if (!isAuthenticated) {
+            toast.error("Please log in to reply.");
+            return;
+        }
+        onReplyToggle(replyingToId === review.id ? null : review.id);
+    };
 
-  const author = (reply.author || "Anonymous").replace(/^@/, "");
-  const content = cleanContent(reply.content);
+    useEffect(() => {
+        const element = contentRef.current;
+        if (!element) return;
 
-  return (
-    <div className="flex gap-3 ml-4 pl-4 border-l-2 border-zinc-200 dark:border-zinc-700">
-      <Avatar
-        avatarPath={reply.author_details?.avatar_path}
-        username={author}
-        size="sm"
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-baseline gap-x-1.5 mb-1">
-          <span className="text-sm font-bold text-black dark:text-white">
-            {author}
-          </span>
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">
-            · {formatDate(reply.created_at)}
-          </span>
+        const lineHeight = parseFloat(getComputedStyle(element).lineHeight) || 20;
+        setOverflows(element.scrollHeight > lineHeight * COLLAPSED_LINES + 4);
+    }, [review.content]);
+
+    return (
+        <div className={`${depth > 0 ? "ml-4 border-l border-zinc-200 pl-4 dark:border-zinc-800 sm:ml-6 sm:pl-5" : ""}`}>
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
+                <div className="flex gap-3">
+                    <Avatar avatarPath={review.author?.avatarUrl} username={authorName} size={depth > 0 ? "sm" : "md"} />
+
+                    <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-black dark:text-white">{authorName}</span>
+                            {review.author?.username && (
+                                <span className="text-xs text-zinc-400 dark:text-zinc-500">@{review.author.username}</span>
+                            )}
+                            <span className="text-xs text-zinc-400 dark:text-zinc-500">{formatDate(review.createdAt)}</span>
+                            {review.rating != null && (
+                                <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${getRatingColor(review.rating)}`}>
+                                    <FaStar size={8} />
+                                    {review.rating}/10
+                                </span>
+                            )}
+                        </div>
+
+                        <p
+                            ref={contentRef}
+                            className="mt-2 whitespace-pre-line text-sm leading-relaxed text-zinc-700 dark:text-zinc-300"
+                            style={!expanded ? {
+                                WebkitLineClamp: COLLAPSED_LINES,
+                                display: "-webkit-box",
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                            } : {}}
+                        >
+                            {review.content}
+                        </p>
+
+                        {overflows && (
+                            <button
+                                type="button"
+                                onClick={() => setExpanded((value) => !value)}
+                                className="mt-1 text-xs font-semibold text-zinc-500 transition hover:text-black dark:text-zinc-400 dark:hover:text-white"
+                            >
+                                {expanded ? "Show less" : "Read more"}
+                            </button>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap items-center gap-4">
+                            <button
+                                type="button"
+                                disabled={pendingLikeId === review.id}
+                                onClick={() => onToggleLike(review.id)}
+                                className={`inline-flex items-center gap-1.5 text-xs font-medium transition ${review.likedByCurrentUser ? "text-rose-500" : "text-zinc-500 hover:text-rose-500 dark:text-zinc-400"}`}
+                            >
+                                {review.likedByCurrentUser ? <FaHeart size={12} /> : <FaRegHeart size={12} />}
+                                <span>{review.likeCount}</span>
+                                <span>Like</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleReplyClick}
+                                className={`inline-flex items-center gap-1.5 text-xs font-medium transition ${replyingToId === review.id ? "text-black dark:text-white" : "text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white"}`}
+                            >
+                                <FiMessageSquare size={12} />
+                                <span>Reply</span>
+                            </button>
+
+                            {review.editableByCurrentUser && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => onEditRequest(review)}
+                                        className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-black dark:text-zinc-400 dark:hover:text-white"
+                                    >
+                                        <FaEdit size={11} />
+                                        <span>Edit</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        disabled={deletingReviewId === review.id}
+                                        onClick={() => onDelete(review)}
+                                        className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
+                                    >
+                                        <FaTrash size={11} />
+                                        <span>{deletingReviewId === review.id ? "Deleting..." : "Delete"}</span>
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
+                        {replyingToId === review.id && (
+                            <div className="mt-4">
+                                <ReviewComposer
+                                    username={null}
+                                    submitting={pendingReplyParentId === review.id}
+                                    onSubmit={(payload) => onReplySubmit(review.id, payload)}
+                                    onCancel={() => onReplyToggle(null)}
+                                    placeholder={`Reply to ${authorName}...`}
+                                    submitLabel="Reply"
+                                    compact
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {review.replies?.length > 0 && (
+                <div className="mt-3 space-y-3">
+                    {review.replies.map((reply) => (
+                        <ReviewNode
+                            key={reply.id}
+                            review={reply}
+                            depth={depth + 1}
+                            isAuthenticated={isAuthenticated}
+                            pendingLikeId={pendingLikeId}
+                            replyingToId={replyingToId}
+                            pendingReplyParentId={pendingReplyParentId}
+                            deletingReviewId={deletingReviewId}
+                            onToggleLike={onToggleLike}
+                            onReplySubmit={onReplySubmit}
+                            onReplyToggle={onReplyToggle}
+                            onEditRequest={onEditRequest}
+                            onDelete={onDelete}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
-        <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
-          {content}
-        </p>
-        <div className="flex items-center gap-4 mt-2">
-          <button
-            onClick={() => {
-              setLikeCount(n => liked ? n - 1 : n + 1);
-              setLiked(v => !v);
-            }}
-            className={`flex items-center gap-1.5 text-xs font-medium transition-colors
-                            ${liked
-                ? "text-rose-500"
-                : "text-zinc-400 dark:text-zinc-500 hover:text-rose-500"
-              }`}
-          >
-            {liked ? <FaHeart size={11} /> : <FaRegHeart size={11} />}
-            {likeCount > 0 && <span>{likeCount}</span>}
-            <span>Like</span>
-          </button>
-          {/* Reply — toggles the inline ReplyBox */}
-          <button
-            // onClick={() => setReplyingOpen(v => !v)}
-            className={`flex items-center gap-1.5 text-xs font-medium transition-colors text-zinc-400 dark:text-zinc-500 hover:text-black dark:hover:text-white"
-              }`}
-          >
-            <FiMessageSquare size={12} />
-            <span>Reply</span>
-          </button>
-          <button className="flex items-center gap-1.5 text-xs font-medium
-                                       text-zinc-400 dark:text-zinc-500
-                                       hover:text-red-500 transition-colors">
-            <FaFlag size={10} />
-            <span>Report</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }
 
 export default function UserReviews({ mediaType }) {
-  const { id } = useParams();
-  const { fullName } = useAuth();
+    const { id } = useParams();
+    const { user, fullName, isAuthenticated } = useAuth();
 
-  const [allReviews, setAllReviews] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-  const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState("highest");
+    const [reviews, setReviews] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(false);
+    const [page, setPage] = useState(1);
+    const [sortBy, setSortBy] = useState("highest");
+    const [submittingReview, setSubmittingReview] = useState(false);
+    const [pendingReplyParentId, setPendingReplyParentId] = useState(null);
+    const [pendingLikeId, setPendingLikeId] = useState(null);
+    const [replyingToId, setReplyingToId] = useState(null);
+    const [editingReview, setEditingReview] = useState(null);
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [deletingReviewId, setDeletingReviewId] = useState(null);
 
-  const apiOrigin = import.meta.env.VITE_TMDB_API_URL
-    ? new URL(import.meta.env.VITE_TMDB_API_URL).origin
-    : "http://localhost:8080";
+    const normalizedMediaType = useMemo(() => normalizeMediaType(mediaType), [mediaType]);
 
-  const fetchReviews = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setError(false);
-    try {
-      let results = [];
-      if (mediaType === "ANIME") {
-        const token = localStorage.getItem("token");
-        const res = await fetch(
-          `${apiOrigin}/api/tmdb/anime/${id}/reviews?page=1`,
-          {
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-          }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        results = data?.results ?? [];
-      } else {
-        const tmdbType = mediaType === "MOVIE" ? "movie" : "tv";
-        const res = await tmdb.get(`/${tmdbType}/${id}/reviews`, {
-          params: { page: 1 },
-        });
-        results = res.data?.results ?? [];
-      }
-      setAllReviews(results);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [apiOrigin, id, mediaType]);
+    const fetchReviews = useCallback(async () => {
+        if (!id) return;
 
-  useEffect(() => {
-    setPage(1);
-    setAllReviews([]);
-    fetchReviews();
-  }, [fetchReviews, id, mediaType]);
+        setLoading(true);
+        setError(false);
+        try {
+            const response = await getMediaReviews(normalizedMediaType, id);
+            setReviews(response.data ?? []);
+        } catch {
+            setError(true);
+        } finally {
+            setLoading(false);
+        }
+    }, [id, normalizedMediaType]);
 
-  useEffect(() => { setPage(1); }, [sortBy]);
+    useEffect(() => {
+        setPage(1);
+        setReplyingToId(null);
+        fetchReviews();
+    }, [fetchReviews]);
 
-  const sorted = [...allReviews].sort((a, b) => {
-    if (sortBy === "highest")
-      return (b.author_details?.rating ?? 0) - (a.author_details?.rating ?? 0);
-    if (sortBy === "lowest")
-      return (a.author_details?.rating ?? 0) - (b.author_details?.rating ?? 0);
-    return new Date(b.created_at) - new Date(a.created_at);
-  });
+    useEffect(() => {
+        setPage(1);
+    }, [sortBy]);
 
-  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
-  const pageStart = (page - 1) * PAGE_SIZE;
-  const pageReviews = sorted.slice(pageStart, pageStart + PAGE_SIZE);
-  const hasReviews = sorted.length > 0;
+    const sortedReviews = useMemo(() => {
+        const nextReviews = [...reviews];
 
-  const rated = allReviews.filter(r => r.author_details?.rating != null);
-  const avgRating = rated.length
-    ? (rated.reduce((s, r) => s + r.author_details.rating, 0) / rated.length).toFixed(1)
-    : null;
+        if (sortBy === "highest") {
+            return nextReviews.sort((left, right) => (right.rating ?? 0) - (left.rating ?? 0)
+                || new Date(right.createdAt) - new Date(left.createdAt));
+        }
+        if (sortBy === "oldest") {
+            return nextReviews.sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+        }
+        return nextReviews.sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    }, [reviews, sortBy]);
 
-  const handlePageChange = (p) => {
-    setPage(p);
-    document
-      .getElementById("reviews-section")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+    const totalPages = Math.ceil(sortedReviews.length / PAGE_SIZE);
+    const pageStart = (page - 1) * PAGE_SIZE;
+    const pageReviews = sortedReviews.slice(pageStart, pageStart + PAGE_SIZE);
+    const ratedReviews = reviews.filter((review) => review.rating != null);
+    const averageRating = ratedReviews.length
+        ? (ratedReviews.reduce((sum, review) => sum + review.rating, 0) / ratedReviews.length).toFixed(1)
+        : null;
 
-  return (
-    <section id="reviews-section" className="mt-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-base font-bold text-black dark:text-white">
-            {allReviews.length > 0
-              ? `${allReviews.length} Comment${allReviews.length !== 1 ? "s" : ""}`
-              : "Comments"
+    const handleCreateReview = async (payload) => {
+        if (!isAuthenticated) {
+            toast.error("Please log in to write a review.");
+            return;
+        }
+
+        setSubmittingReview(true);
+        try {
+            await createMediaReview(normalizedMediaType, id, payload);
+            await fetchReviews();
+            toast.success("Review posted.");
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Could not post the review.");
+        } finally {
+            setSubmittingReview(false);
+        }
+    };
+
+    const handleReplySubmit = async (parentReviewId, payload) => {
+        setPendingReplyParentId(parentReviewId);
+        try {
+            await createMediaReview(normalizedMediaType, id, {
+                content: payload.content,
+                parentReviewId,
+            });
+            setReplyingToId(null);
+            await fetchReviews();
+            toast.success("Reply posted.");
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Could not post the reply.");
+        } finally {
+            setPendingReplyParentId(null);
+        }
+    };
+
+    const handleToggleLike = async (reviewId) => {
+        if (!isAuthenticated) {
+            toast.error("Please log in to like reviews.");
+            return;
+        }
+
+        setPendingLikeId(reviewId);
+        try {
+            const response = await toggleReviewLike(reviewId);
+            const { liked, likeCount } = response.data;
+
+            setReviews((current) => updateReviewTree(current, reviewId, (review) => ({
+                ...review,
+                likedByCurrentUser: liked,
+                likeCount,
+            })));
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Could not update the like.");
+        } finally {
+            setPendingLikeId(null);
+        }
+    };
+
+    const handleEditSave = async (payload) => {
+        if (!editingReview) return;
+
+        setSavingEdit(true);
+        try {
+            await updateReview(editingReview.id, payload);
+            setEditingReview(null);
+            await fetchReviews();
+            toast.success("Review updated.");
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Could not update the review.");
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
+    const handleDeleteReview = async (review) => {
+        const label = review.parentReviewId ? "reply" : "review";
+        if (!window.confirm(`Delete this ${label}?${review.replies?.length ? " This will also remove its replies." : ""}`)) {
+            return;
+        }
+
+        setDeletingReviewId(review.id);
+        try {
+            await deleteReview(review.id);
+            if (replyingToId === review.id) {
+                setReplyingToId(null);
             }
-          </h2>
-          {avgRating && (
-            <span className="flex items-center gap-1 text-xs font-semibold
-                                         text-zinc-500 dark:text-zinc-400">
-              <FaStar className="text-yellow-400" size={11} />
-              Avg {avgRating}/10
-            </span>
-          )}
-        </div>
+            if (editingReview?.id === review.id) {
+                setEditingReview(null);
+            }
+            await fetchReviews();
+            toast.success("Deleted successfully.");
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Could not delete the review.");
+        } finally {
+            setDeletingReviewId(null);
+        }
+    };
 
-        {/* Pill sort buttons */}
-        {hasReviews && (
-          <div className="flex items-center gap-1.5">
-            {SORT_OPTS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setSortBy(opt.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors
-                                    ${sortBy === opt.value
-                    ? "bg-black dark:bg-white text-white dark:text-black border-transparent"
-                    : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500"
-                  }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+    const handlePageChange = (nextPage) => {
+        setPage(nextPage);
+        document.getElementById("reviews-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
 
-      {/* Top-level comment input */}
-      <CommentInput username={fullName} />
+    return (
+        <section id="reviews-section" className="mt-12">
+            <EditReviewDialog
+                review={editingReview}
+                open={Boolean(editingReview)}
+                saving={savingEdit}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditingReview(null);
+                    }
+                }}
+                onSave={handleEditSave}
+            />
 
-      {/* Loading */}
-      {loading && (
-        <div className="space-y-5">
-          {Array.from({ length: 4 }).map((_, i) => <ReviewSkeleton key={i} />)}
-        </div>
-      )}
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-base font-bold text-black dark:text-white">
+                        {reviews.length > 0 ? `${reviews.length} Review${reviews.length !== 1 ? "s" : ""}` : "Reviews"}
+                    </h2>
+                    {averageRating && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                            <FaStar className="text-yellow-400" size={11} />
+                            Avg {averageRating}/10
+                        </span>
+                    )}
+                </div>
 
-      {/* Error */}
-      {error && !loading && (
-        <div className="rounded-xl border border-dashed border-red-200 dark:border-red-800
-                                bg-red-50 dark:bg-red-950/20 p-6 text-center">
-          <p className="text-sm text-red-500 dark:text-red-400">
-            Failed to load reviews.
-          </p>
-          <button
-            onClick={fetchReviews}
-            className="mt-2 text-xs font-semibold text-red-500 hover:underline"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+                {reviews.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {SORT_OPTS.map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setSortBy(option.value)}
+                                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${sortBy === option.value
+                                    ? "border-transparent bg-black text-white dark:bg-white dark:text-black"
+                                    : "border-zinc-200 text-zinc-500 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500"
+                                }`}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
 
-      {/* Empty */}
-      {!loading && !error && !hasReviews && (
-        <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700
-                                py-12 text-center">
-          <FiMessageSquare
-            className="mx-auto text-zinc-300 dark:text-zinc-600 mb-3"
-            size={24}
-          />
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            No reviews yet for this title.
-          </p>
-        </div>
-      )}
+            {isAuthenticated ? (
+                <ReviewComposer
+                    username={fullName || user}
+                    submitting={submittingReview}
+                    onSubmit={handleCreateReview}
+                    placeholder="Share what you thought about this title..."
+                    submitLabel="Post Review"
+                    showRating
+                />
+            ) : (
+                <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-5 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+                    Log in to write reviews, reply in threads, and like other users' thoughts.
+                </div>
+            )}
 
-      {/* Review list */}
-      {!loading && hasReviews && (
-        <div className="space-y-2">
-          {pageReviews.map(review => (
-            <ReviewCard key={review.id} review={review} />
-          ))}
-        </div>
-      )}
+            {loading && (
+                <div className="mt-6 space-y-5">
+                    {Array.from({ length: 4 }).map((_, index) => <ReviewSkeleton key={index} />)}
+                </div>
+            )}
 
-      {/* Pagination */}
-      {!loading && totalPages > 1 && (
-        <div className="flex justify-center mt-6">
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-          />
-        </div>
-      )}
-    </section>
-  );
+            {error && !loading && (
+                <div className="mt-6 rounded-2xl border border-dashed border-red-200 bg-red-50 p-6 text-center dark:border-red-900/70 dark:bg-red-950/20">
+                    <p className="text-sm text-red-500 dark:text-red-400">Failed to load reviews.</p>
+                    <button
+                        type="button"
+                        onClick={fetchReviews}
+                        className="mt-2 text-xs font-semibold text-red-500 hover:underline"
+                    >
+                        Retry
+                    </button>
+                </div>
+            )}
+
+            {!loading && !error && reviews.length === 0 && (
+                <div className="mt-6 rounded-2xl border border-dashed border-zinc-200 py-12 text-center dark:border-zinc-800">
+                    <FiMessageSquare className="mx-auto mb-3 text-zinc-300 dark:text-zinc-600" size={24} />
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        No reviews yet for this title. Start the conversation.
+                    </p>
+                </div>
+            )}
+
+            {!loading && !error && reviews.length > 0 && (
+                <div className="mt-6 space-y-4">
+                    {pageReviews.map((review) => (
+                        <ReviewNode
+                            key={review.id}
+                            review={review}
+                            isAuthenticated={isAuthenticated}
+                            pendingLikeId={pendingLikeId}
+                            replyingToId={replyingToId}
+                            pendingReplyParentId={pendingReplyParentId}
+                            deletingReviewId={deletingReviewId}
+                            onToggleLike={handleToggleLike}
+                            onReplySubmit={handleReplySubmit}
+                            onReplyToggle={setReplyingToId}
+                            onEditRequest={setEditingReview}
+                            onDelete={handleDeleteReview}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {!loading && totalPages > 1 && (
+                <div className="mt-6 flex justify-center">
+                    <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+                </div>
+            )}
+        </section>
+    );
 }

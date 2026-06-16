@@ -1,30 +1,30 @@
-const TOKEN_KEY = "token";
 const USER_KEY = "user";
 const FULL_NAME_KEY = "fullName";
 const REDIRECT_AFTER_LOGIN_KEY = "redirectAfterLogin";
 
 /**
  * Keeps auth-related browser storage access in one place.
- * This avoids repeating raw localStorage/sessionStorage calls across API clients.
+ * Only non-sensitive identity fields stay in localStorage now.
+ * The JWT itself lives in an HttpOnly cookie managed by the backend.
  */
 export function readStoredSession() {
-    const token = localStorage.getItem(TOKEN_KEY);
     const user = localStorage.getItem(USER_KEY);
     const fullName = localStorage.getItem(FULL_NAME_KEY);
 
     return {
-        token,
+        token: null,
         user,
         fullName,
-        isAuthenticated: Boolean(token && user),
+        isAuthenticated: Boolean(user),
     };
 }
 
 /**
- * Persists the backend auth payload after a successful login.
+ * Persists only the user identity after a successful login.
+ * We explicitly remove any legacy token value so old localStorage sessions migrate cleanly.
  */
-export function persistSession({ token, userName, fullName }) {
-    localStorage.setItem(TOKEN_KEY, token);
+export function persistSession({ userName, fullName }) {
+    localStorage.removeItem("token");
     localStorage.setItem(USER_KEY, userName);
     localStorage.setItem(FULL_NAME_KEY, fullName ?? "");
 }
@@ -33,7 +33,7 @@ export function persistSession({ token, userName, fullName }) {
  * Clears only the keys owned by the auth flow.
  */
 export function clearStoredSession() {
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("token");
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(FULL_NAME_KEY);
 }
@@ -45,6 +45,18 @@ export function saveRedirectAfterLogin(pathname) {
     sessionStorage.setItem(REDIRECT_AFTER_LOGIN_KEY, pathname);
 }
 
+/**
+ * Reads and clears the pending post-login redirect path.
+ * Returns null when no redirect is waiting.
+ */
+export function consumeRedirectAfterLogin() {
+    const redirectPath = sessionStorage.getItem(REDIRECT_AFTER_LOGIN_KEY);
+    if (redirectPath) {
+        sessionStorage.removeItem(REDIRECT_AFTER_LOGIN_KEY);
+    }
+    return redirectPath;
+}
+
 export function readToken() {
-    return localStorage.getItem(TOKEN_KEY);
+    return null;
 }

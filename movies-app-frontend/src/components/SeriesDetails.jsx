@@ -1,16 +1,26 @@
 import { useNavigate, useParams } from "react-router-dom";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { tmdb } from "../api/tmdb";
-import { BreadCrumbs, DetailPageSkeleton, EpisodeTableHorizontal, Legend, Row } from "@/utils/helper";
-
-import { FaPlus, FaStar, FaHeart, FaShareAlt, FaCheck, FaTv, FaFilm } from "react-icons/fa";
+import { BreadCrumbs, DetailPageSkeleton, Legend, Row } from "@/utils/helper";
+import { FaPlus, FaHeart, FaShareAlt, FaCheck, FaTv, FaFilm } from "react-icons/fa";
 import { useWatchlist } from "./hooks/useWatchlist";
 import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
-import { watchlistApi } from "@/api/watchlist";
+import PersonalStarRating from "@/components/PersonalStarRating";
+import { getEpisodeProgress, updateEpisodeProgress, updatePersonalRating, watchlistApi } from "@/api/watchlist";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
 import UserReviews from "./UserReviews";
 import WatchProviders from "./WatchProviders";
+import EpisodeProgressTable from "@/components/EpisodeProgressTable";
+import EpisodeInsights from "@/components/EpisodeInsights";
+import { useWatchlistIds } from "./hooks/useWatchlistIds";
+
+const getApiErrorMessage = (error, fallbackMessage) => {
+    // Prefer the backend message so validation failures are easier to debug from the UI.
+    return error?.response?.data?.message || fallbackMessage;
+};
+
+const isNotFoundError = (error) => error?.response?.status === 404;
 
 export default function SeriesDetails() {
     const { id } = useParams();
@@ -21,31 +31,40 @@ export default function SeriesDetails() {
     const [seasons, setSeasons] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+    const [similarTitles, setSimilarTitles] = useState([]);
     const [isInWatchlist, setIsInWatchlist] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
+    const [personalRating, setPersonalRating] = useState(null);
+    const [episodeProgress, setEpisodeProgress] = useState([]);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalItem, setModalItem] = useState(null);
 
     const { addToWatchlist, updateFavorite } = useWatchlist();
+    const watchlistIds = useWatchlistIds();
 
     useEffect(() => {
         const load = async () => {
             setLoading(true);
             setError(false);
             try {
-                const [res, creditRes] = await Promise.all([
+                const [res, creditRes, similarRes] = await Promise.all([
                     tmdb.get(`/series/${id}/seasons`),
                     tmdb.get("/credits", { params: { type: "TV", id } }),
+                    tmdb.get("/similar", { params: { type: "TV", id } }),
                 ]);
                 const showData = res.data;
                 setShow(showData);
                 setCredits(creditRes.data);
+                setSimilarTitles((similarRes.data?.results ?? []).slice(0, 10).map((item) => ({
+                    ...item,
+                    media_type: "tv",
+                })));
                 // Filter out Season 0 (Specials) and seasons with no episodes.
                 setSeasons(
                     (showData.seasons ?? []).filter(
-                        (s) => s.season_number > 0 && s.episodes?.length > 0
-                    )
+                        (season) => season.season_number > 0 && season.episodes?.length > 0,
+                    ),
                 );
 
                 try {
@@ -53,13 +72,21 @@ export default function SeriesDetails() {
                     if (watchlistRes?.data?.inWatchlist) {
                         setIsInWatchlist(true);
                         setIsFavorite(watchlistRes.data.favorite);
+                        setPersonalRating(watchlistRes.data.personalRating ?? null);
+                    } else {
+                        setPersonalRating(null);
                     }
-                } catch (e) {
-                    if (e.response?.status !== 404) console.error("Watchlist status check failed:", e);
+                } catch (watchlistError) {
+                    if (!isNotFoundError(watchlistError)) {
+                        console.error("Watchlist status check failed:", watchlistError);
+                        return;
+                    }
                     setIsInWatchlist(false);
                     setIsFavorite(false);
+                    setPersonalRating(null);
                 }
-            } catch {
+            } catch (requestError) {
+                console.error("Series details load failed:", requestError);
                 setError(true);
             } finally {
                 setLoading(false);
@@ -68,7 +95,40 @@ export default function SeriesDetails() {
         load();
     }, [id]);
 
+    useEffect(() => {
+        if (!id || !isLoggedIn()) {
+            setEpisodeProgress([]);
+            return;
+        }
+
+        let ignore = false;
+
+        const loadProgress = async () => {
+            try {
+                const res = await getEpisodeProgress(id);
+                if (!ignore) {
+                    setEpisodeProgress(res.data ?? []);
+                }
+            } catch (progressError) {
+                console.error("Episode progress load failed:", progressError);
+                if (!ignore) {
+                    setEpisodeProgress([]);
+                }
+            }
+        };
+
+        loadProgress();
+        return () => {
+            ignore = true;
+        };
+    }, [id]);
+
     const handleWatchlist = useCallback(() => {
+        if (!show) return;
+        if (!show?.id || !(show?.title || show?.name)) {
+            toast.error("Series details are still loading. Please try again.");
+            return;
+        }
         if (!isLoggedIn()) {
             sessionStorage.setItem("redirectAfterLogin", `/series/${show.id}`);
             toast.error("Please log in to manage your watchlist.");
@@ -90,58 +150,171 @@ export default function SeriesDetails() {
             const res = await watchlistApi.get(`/${show.id}/status`);
             setIsInWatchlist(res?.data?.inWatchlist ?? false);
             setIsFavorite(res?.data?.favorite ?? false);
-        } catch {
-            // 404 means still not in watchlist — keep current state.
+            setPersonalRating(res?.data?.personalRating ?? null);
+        } catch (error) {
+            // Only clear local watchlist state when the backend confirms the title is absent.
+            if (isNotFoundError(error)) {
+                setIsInWatchlist(false);
+                setIsFavorite(false);
+                setPersonalRating(null);
+            }
         }
     }, [show]);
 
     const handleFavorite = useCallback(async () => {
+        if (!show) return;
+        if (!show?.id || !(show?.title || show?.name)) {
+            toast.error("Series details are still loading. Please try again.");
+            return;
+        }
         if (!isLoggedIn()) {
             sessionStorage.setItem("redirectAfterLogin", `/series/${show.id}`);
             toast.error("Please log in to manage your favorites.");
             return;
         }
-        if (isFavorite) {
-            await updateFavorite(show.id, false);
-            setIsFavorite(false);
-            toast.success("Removed from favorites, still in watchlist.");
-            return;
-        }
-        if (isInWatchlist && !isFavorite) {
-            await updateFavorite(show.id, true);
+        try {
+            if (isFavorite) {
+                await updateFavorite(show.id, false);
+                setIsFavorite(false);
+                toast.success("Removed from favorites, still in watchlist.");
+                return;
+            }
+            if (isInWatchlist && !isFavorite) {
+                await updateFavorite(show.id, true);
+                setIsFavorite(true);
+                toast.success("Added to favorites.");
+                return;
+            }
+            await addToWatchlist({ id: show.id, title: show.title || show.name, favorite: true, mediaType: "TV" });
+            setIsInWatchlist(true);
             setIsFavorite(true);
             toast.success("Added to favorites.");
-            return;
+        } catch (favoriteError) {
+            console.error("Favorite update failed:", favoriteError);
+            toast.error(getApiErrorMessage(favoriteError, "Could not update favorite."));
         }
-        await addToWatchlist({ id: show.id, title: show.title || show.name, favorite: true, mediaType: "TV" });
-        setIsInWatchlist(true);
-        setIsFavorite(true);
-        toast.success("Added to favorites.");
     }, [show, isInWatchlist, isFavorite, addToWatchlist, updateFavorite]);
 
     const handleShare = useCallback(() => {
+        if (!(show?.title || show?.name)) {
+            toast.error("Series details are still loading. Please try again.");
+            return;
+        }
         navigator.share?.({ title: show.title || show.name, url: window.location.href });
     }, [show]);
+
+    const handleRatingChange = useCallback(async (nextRating) => {
+        if (!show) return;
+        if (nextRating != null && (nextRating < 1 || nextRating > 5)) {
+            toast.error("Rating must be between 1 and 5.");
+            return;
+        }
+
+        if (!isLoggedIn()) {
+            sessionStorage.setItem("redirectAfterLogin", `/series/${show.id}`);
+            toast.error("Please log in to rate this title.");
+            return;
+        }
+
+        if (!isInWatchlist) {
+            toast.error("Add this title to your watchlist to save a rating.");
+            setModalItem({
+                movieId: show.id,
+                movieTitle: show.title || show.name,
+                mediaType: "tv",
+                posterPath: show.poster_path,
+            });
+            setModalOpen(true);
+            return;
+        }
+
+        const previousRating = personalRating;
+        setPersonalRating(nextRating);
+        try {
+            await updatePersonalRating(show.id, nextRating);
+        } catch (errorState) {
+            console.error("Personal rating update failed:", errorState);
+            setPersonalRating(previousRating);
+            toast.error(getApiErrorMessage(errorState, "Could not save your rating."));
+        }
+    }, [isInWatchlist, personalRating, show]);
+
+    // The progress table handles chunking internally, so we keep each season's raw episode list here.
+    const seasonColumns = seasons.map((season) => ({
+        season: season.season_number,
+        episodes: season.episodes ?? [],
+        avg: (season.episodes ?? []).reduce((total, episode) => total + (episode.vote_average || 0), 0)
+            / ((season.episodes ?? []).length || 1),
+    }));
+
+    const watchedEpisodeKeys = useMemo(
+        () => new Set(episodeProgress.map((item) => `${item.seasonNumber}-${item.episodeNumber}`)),
+        [episodeProgress],
+    );
+    const totalEpisodeCount = seasonColumns.reduce(
+        (count, season) => count + (season.episodes?.length ?? 0),
+        0,
+    );
+    const defaultEpisodeRuntime = show?.episode_run_time?.[0] || 0;
+    // Older progress rows may still have 0 runtime saved, so fall back to the series default when needed.
+    const trackedMinutes = episodeProgress.reduce(
+        (minutes, item) => minutes + (item.runtimeMinutes > 0 ? item.runtimeMinutes : defaultEpisodeRuntime),
+        0,
+    );
+
+    const handleEpisodeToggle = useCallback(async (episode, seasonNumber) => {
+        if (!episode?.episode_number || !seasonNumber) {
+            toast.error("Episode details are incomplete. Please refresh and try again.");
+            return;
+        }
+        if (!isLoggedIn()) {
+            sessionStorage.setItem("redirectAfterLogin", `/series/${id}`);
+            toast.error("Please log in to track episode progress.");
+            return;
+        }
+
+        const episodeKey = `${seasonNumber}-${episode.episode_number}`;
+        const isCurrentlyWatched = watchedEpisodeKeys.has(episodeKey);
+        const runtimeMinutes = Math.max(episode.runtime || defaultEpisodeRuntime || 0, 0);
+
+        try {
+            const res = await updateEpisodeProgress(id, {
+                seasonNumber,
+                episodeNumber: episode.episode_number,
+                episodeName: episode.name,
+                runtimeMinutes,
+                watched: !isCurrentlyWatched,
+            });
+
+            setEpisodeProgress((current) => {
+                if (isCurrentlyWatched) {
+                    return current.filter(
+                        (item) => !(item.seasonNumber === seasonNumber && item.episodeNumber === episode.episode_number),
+                    );
+                }
+
+                const withoutDuplicate = current.filter(
+                    (item) => !(item.seasonNumber === seasonNumber && item.episodeNumber === episode.episode_number),
+                );
+                return [...withoutDuplicate, res.data].sort(
+                    (left, right) => left.seasonNumber - right.seasonNumber || left.episodeNumber - right.episodeNumber,
+                );
+            });
+        } catch (progressError) {
+            console.error("Episode progress update failed:", progressError);
+            toast.error(getApiErrorMessage(progressError, "Could not update episode progress."));
+        }
+    }, [defaultEpisodeRuntime, id, watchedEpisodeKeys]);
+
+    const director = credits?.crew?.filter((member) => member.job === "Director" || member.job === "Executive Producer").map((person) => person.name);
+    const producers = credits?.crew?.filter((member) => member.job === "Producer").map((person) => person.name);
+    const topCast = credits?.cast?.slice(0, 12);
 
     if (loading) return <DetailPageSkeleton />;
     if (error) return <p className="text-center mt-10 text-red-500">Failed to load series. Please refresh.</p>;
     if (!show) return <p className="text-center mt-10">Series not found.</p>;
 
-    // Pass full episode arrays — EpisodeTableHorizontal handles chunking internally.
-    // Pre-chunking here caused double-splitting, making one season appear as two rows.
-    const seasonColumns = seasons.map((s) => ({
-        season: s.season_number,
-        episodes: s.episodes ?? [],
-        avg: (s.episodes ?? []).reduce((a, e) => a + (e.vote_average || 0), 0)
-            / ((s.episodes ?? []).length || 1),
-    }));
-
-    const director = credits?.crew?.filter((c) => c.job === "Director" || c.job === "Executive Producer").map((p) => p.name);
-    const producers = credits?.crew?.filter((c) => c.job === "Producer").map((p) => p.name);
-    const topCast = credits?.cast?.slice(0, 12);
-
     return (
-        window.scrollTo(0, 0),
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
             <AddToWatchlistModal
                 open={modalOpen}
@@ -164,7 +337,6 @@ export default function SeriesDetails() {
 
             <div className="max-w-7xl mx-auto px-4 md:px-6 -mt-24 relative">
                 <div className="rounded-xl shadow-lg p-6 bg-white dark:bg-zinc-900">
-
                     <div className="flex flex-col md:flex-row gap-6">
                         <img
                             src={`https://image.tmdb.org/t/p/w300${show.poster_path}`}
@@ -200,9 +372,10 @@ export default function SeriesDetails() {
                                     {isInWatchlist ? <><FaCheck size={12} /> In Watchlist</> : <><FaPlus size={12} /> Watchlist</>}
                                 </button>
 
-                                <button className="px-4 py-2 rounded-lg border text-sm font-medium flex items-center gap-1 text-yellow-500 cursor-pointer transition-all duration-200 hover:bg-yellow-500/10 hover:scale-[1.03]">
-                                    <FaStar /> Rate
-                                </button>
+                                <div className="flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 dark:border-white/10">
+                                    <span className="text-sm font-medium text-black/60 dark:text-white/60">Your rating</span>
+                                    <PersonalStarRating value={personalRating || 0} onChange={handleRatingChange} />
+                                </div>
 
                                 <button
                                     onClick={handleFavorite}
@@ -234,6 +407,21 @@ export default function SeriesDetails() {
                         <Legend color="bg-[#633875]" label="Garbage" />
                     </div>
 
+                    <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                        <div className="rounded-xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                            <p className="text-xs uppercase tracking-wide text-black/50 dark:text-white/50">Episodes watched</p>
+                            <p className="mt-1 text-2xl font-bold">{episodeProgress.length}</p>
+                        </div>
+                        <div className="rounded-xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                            <p className="text-xs uppercase tracking-wide text-black/50 dark:text-white/50">Progress</p>
+                            <p className="mt-1 text-2xl font-bold">{episodeProgress.length}/{totalEpisodeCount || 0}</p>
+                        </div>
+                        <div className="rounded-xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                            <p className="text-xs uppercase tracking-wide text-black/50 dark:text-white/50">Tracked time</p>
+                            <p className="mt-1 text-2xl font-bold">{(trackedMinutes / 60).toFixed(1)}h</p>
+                        </div>
+                    </div>
+
                     <div className="mt-10 grid md:grid-cols-2 gap-6">
                         <div className="p-6 rounded-xl bg-zinc-100 dark:bg-zinc-800">
                             <div className="flex items-center gap-2 mb-4">
@@ -244,14 +432,19 @@ export default function SeriesDetails() {
                             <p className="text-sm mt-1"><strong>Producers:</strong> {producers?.join(", ") || "N/A"}</p>
                         </div>
 
-                        <WatchProviders
-                            mediaType="TV"
-                            id={show.id}
-                        />
+                        <WatchProviders mediaType="TV" id={show.id} />
                     </div>
 
+                    {/* Shared insights block keeps the new analytics close to the existing episode tracker. */}
+                    <EpisodeInsights seasonColumns={seasonColumns} />
+
                     {seasonColumns.length > 0
-                        ? <EpisodeTableHorizontal seasonColumns={seasonColumns} />
+                        ? <EpisodeProgressTable
+                            seasonColumns={seasonColumns}
+                            watchedEpisodeKeys={watchedEpisodeKeys}
+                            onToggleWatched={handleEpisodeToggle}
+                            defaultRuntimeMinutes={defaultEpisodeRuntime}
+                        />
                         : <p className="mt-6 text-center text-gray-500 dark:text-gray-400">No episode data available.</p>
                     }
 
@@ -263,6 +456,17 @@ export default function SeriesDetails() {
                         icon={<FaFilm />}
                         iconColor="text-blue-500"
                         onSelect={(item) => navigate(`/celebrities/${item.id}`)}
+                    />
+
+                    <Row
+                        title="Similar Titles"
+                        items={similarTitles}
+                        loading={loading}
+                        showType
+                        icon={<FaTv />}
+                        iconColor="text-violet-500"
+                        watchlistIds={watchlistIds}
+                        onSelect={(item) => navigate(`/series/${item.id}`)}
                     />
                 </div>
                 <UserReviews mediaType="tv" />

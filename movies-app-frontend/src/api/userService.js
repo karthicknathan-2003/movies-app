@@ -1,18 +1,12 @@
 import axios from "axios";
-import { clearStoredSession, readToken } from "@/utils/authSession";
+import { navigationRef } from "@/utils/navigation";
+import { clearStoredSession, saveRedirectAfterLogin } from "@/utils/authSession";
 
 // Base Axios instance for user-related requests
 const userAPI = axios.create({
-    baseURL: import.meta.env.VITE_USER_API_URL || "http://localhost:8080/api/users",
-});
-
-// Attach JWT token to every request
-userAPI.interceptors.request.use((config) => {
-    const token = readToken();
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
+    baseURL: import.meta.env.VITE_USER_API_URL,
+    // Include the HttpOnly auth cookie on both public and authenticated user requests.
+    withCredentials: true,
 });
 
 // Handle 401 responses
@@ -20,8 +14,9 @@ userAPI.interceptors.response.use(
     (res) => res,
     (error) => {
         if (error.response?.status === 401) {
+            saveRedirectAfterLogin(window.location.pathname + window.location.search);
             clearStoredSession();
-            window.location.href = "/login";
+            navigationRef.navigate?.("/login", { replace: true });
         }
         return Promise.reject(error);
     }
@@ -53,5 +48,8 @@ export const updateUserProfile = (data) => userAPI.put('/profile', data);
 
 // Get current logged-in user's profile.
 export const getCurrentUserProfile = () => userAPI.get('/me');
+
+// Get the signed-in user's profile activity feed.
+export const getMyActivity = () => userAPI.get('/me/activity');
 
 export default userAPI;

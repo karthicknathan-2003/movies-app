@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaUser, FaSpinner, FaArrowLeft, FaUserPlus, FaUserCheck, FaList, FaMapMarkerAlt } from "react-icons/fa";
+import { FaUser, FaSpinner, FaUserPlus, FaUserCheck, FaList, FaMapMarkerAlt } from "react-icons/fa";
 import { useAuth } from "@/components/context/AuthContext";
 import { toast } from "sonner";
 import { BreadCrumbs } from "@/utils/helper";
@@ -132,7 +132,6 @@ export default function UserProfile() {
 
     const isOwnProfile = currentUser === username;
     return (
-        window.scrollTo(0, 0),
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
             <BreadCrumbs
                 overlay={false}
@@ -142,17 +141,6 @@ export default function UserProfile() {
                     { name: username },
                 ]}
             />
-            {/* Header with back button */}
-            <div className="flex items-center justify-between mb-8">
-                <button
-                    onClick={() => navigate("/users")}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 transition text-black dark:text-white"
-                >
-                    <FaArrowLeft size={14} />
-                    <span>Back</span>
-                </button>
-            </div>
-
             {/* User info section */}
             <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between mb-8 gap-6 p-6 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-black/50">
                 {/* LEFT: Avatar + Info */}

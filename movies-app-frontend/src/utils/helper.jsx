@@ -1,8 +1,13 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import AddToWatchlistModal from "@/components/AddToWatchlistModal";
+import { useWatchlist } from "@/components/hooks/useWatchlist";
+import { watchlistApi } from "@/api/watchlist";
+import { isLoggedIn } from "@/api/authService";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@radix-ui/react-tooltip";
 import { ArrowLeft } from "lucide-react";
-import { FaFilm, FaStar } from "react-icons/fa";
+import { FaCheck, FaFilm, FaHeart, FaPlus, FaStar } from "react-icons/fa";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { useEffect, useState } from "react";
 
 // Conversion rate used to display budgets and revenues in Indian Rupees.
@@ -67,7 +72,7 @@ export function SkeletonCard() {
 
 /* Horizontally scrollable row of cards with a title, icon, and loading state.
    Shows an empty state message when loading is done but no items are available. */
-export function Row({ title, items, onSelect, loading, showType, icon, iconColor }) {
+export function Row({ title, items, onSelect, loading, showType, icon, iconColor, watchlistIds }) {
     return (
         <div className="mt-8">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-black dark:text-white">
@@ -88,6 +93,7 @@ export function Row({ title, items, onSelect, loading, showType, icon, iconColor
                             item={item}
                             onClick={() => onSelect(item)}
                             showType={showType}
+                            watchlistIds={watchlistIds}
                         />
                     ))
                 )}
@@ -99,55 +105,186 @@ export function Row({ title, items, onSelect, loading, showType, icon, iconColor
 /* Generic card component shared across movies, series, and people.
    Adapts its badges and image source based on the item's media_type.
    Falls back to the placeholder image if the TMDB image fails to load. */
-export function Card({ item, onClick, showType, showTitle = true }) {
+export function Card({ item, onClick, showType, showTitle = true, watchlistIds, showQuickActions = true }) {
     const [imgError, setImgError] = useState(false);
+    const [modalOpen, setModalOpen] = useState(false);
+    const [isFavorite, setIsFavorite] = useState(false);
+    const resolvedMediaType = item.media_type
+        || (item.profile_path && !item.poster_path ? "person" : null)
+        || (item.first_air_date || item.number_of_seasons != null ? "tv" : "movie");
+    const isMediaCard = resolvedMediaType !== "person";
+    const mediaLabel = resolvedMediaType === "movie" ? "Movie" : "TV";
+    const title = item.title || item.name;
+    const [isSavedLocally, setIsSavedLocally] = useState(false);
+    const isAlreadyAdded = isMediaCard && (watchlistIds?.has?.(item.id) || isSavedLocally);
+    const { addToWatchlist, updateFavorite } = useWatchlist();
+
+    useEffect(() => {
+        setIsFavorite(false);
+    }, [item.id]);
+
+    useEffect(() => {
+        setIsSavedLocally(Boolean(isMediaCard && watchlistIds?.has?.(item.id)));
+    }, [isMediaCard, item.id, watchlistIds]);
+
+    const openWatchlistModal = (event) => {
+        event.stopPropagation();
+
+        if (!isMediaCard) return;
+        if (!isLoggedIn()) {
+            sessionStorage.setItem("redirectAfterLogin", window.location.pathname + window.location.search);
+            toast.error("Please log in to manage your watchlist.");
+            return;
+        }
+
+        setModalOpen(true);
+    };
+
+    const handleFavoriteAction = async (event) => {
+        event.stopPropagation();
+
+        if (!isMediaCard) return;
+        if (!isLoggedIn()) {
+            sessionStorage.setItem("redirectAfterLogin", window.location.pathname + window.location.search);
+            toast.error("Please log in to manage your favorites.");
+            return;
+        }
+
+        try {
+            if (isAlreadyAdded) {
+                await updateFavorite(item.id, true);
+            } else {
+                await addToWatchlist({
+                    id: item.id,
+                    title,
+                    favorite: true,
+                    mediaType: resolvedMediaType,
+                });
+                setIsSavedLocally(true);
+            }
+
+            setIsFavorite(true);
+            toast.success(`${title} is now in your favorites.`);
+        } catch (error) {
+            if (error.response?.status === 409) {
+                toast.error("This title is already in one of your lists.");
+            } else {
+                toast.error("Could not update favorites right now.");
+            }
+        }
+    };
+
     return (
         <div onClick={onClick} className="min-w-[150px] group cursor-pointer relative">
+            <AddToWatchlistModal
+                open={modalOpen}
+                onClose={async () => {
+                    setModalOpen(false);
+
+                    // Refresh the quick-action state after the modal changes the user's lists.
+                    if (!isMediaCard) return;
+
+                    try {
+                        const statusResponse = await watchlistApi.get(`/${item.id}/status`);
+                        setIsSavedLocally(statusResponse?.data?.inWatchlist ?? false);
+                        setIsFavorite(statusResponse?.data?.favorite ?? false);
+                    } catch {
+                        setIsSavedLocally(false);
+                        setIsFavorite(false);
+                    }
+                }}
+                mediaItem={{
+                    movieId: item.id,
+                    movieTitle: title,
+                    mediaType: resolvedMediaType,
+                    posterPath: item.poster_path,
+                }}
+            />
+
             {/* Rating badge */}
             {item.vote_average > 0 && (
-                <span className="absolute top-2 left-2 z-10 text-[11px] px-2 py-1
-                                 rounded bg-black text-white flex items-center gap-1">
+                <span className="absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full bg-black/80 px-2.5 py-1 text-[11px] text-white shadow-sm transition duration-200 group-hover:scale-105 group-hover:bg-black">
                     <FaStar size={11} className="text-yellow-500" />
                     <span>{item.vote_average.toFixed(1)}</span>
                 </span>
             )}
 
             {/* Media type badge */}
-            {showType && item.media_type !== "person" && (
-                <span className="absolute top-2 right-2 z-10 text-[10px] px-2 py-1
-                                 rounded bg-black text-white">
-                    {item.media_type === "movie" ? "Movie" : "TV"}
+            {showType && isMediaCard && (
+                <span className="absolute right-2 top-2 z-20 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white shadow-sm backdrop-blur-sm">
+                    {mediaLabel}
                 </span>
             )}
 
-            {/* Use state instead of src-swap to avoid infinite onError loop. */}
-            {imgError ? (
-                <div className="w-full h-[225px] rounded-xl bg-zinc-200 dark:bg-zinc-700
-                                flex items-center justify-center">
-                    <FaFilm className="text-zinc-400" size={32} />
+            {/* Tick badge shows the title is already saved, without changing Favorites/Watchlist cards. */}
+            {/* {isAlreadyAdded && (
+                <span className="absolute right-2.5 top-10 z-20 inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-emerald-600 text-white shadow-sm dark:border-black/10">
+                    <FaCheck size={9} />
+                </span>
+            )} */}
+
+            <div className="relative overflow-hidden rounded-xl">
+                {/* Use state instead of src-swap to avoid infinite onError loop. */}
+                {imgError ? (
+                    <div className="flex h-[225px] w-full items-center justify-center rounded-xl bg-zinc-200 dark:bg-zinc-700">
+                        <FaFilm className="text-zinc-400" size={32} />
+                    </div>
+                ) : (
+                    <img
+                        src={getPoster(item.poster_path || item.profile_path)}
+                        alt={title}
+                        onError={() => setImgError(true)}
+                        className="h-[225px] w-full rounded-xl bg-gray-200 object-cover transition duration-300 group-hover:scale-[1.06] dark:bg-zinc-700"
+                    />
+                )}
+
+                {/* Gradient overlay adds a clearer title/readability layer without changing layout. */}
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-transparent opacity-90 transition duration-300 group-hover:from-black/95" />
+
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-3 text-white">
+                    {/* <p className="line-clamp-2 text-sm font-semibold drop-shadow-sm">
+                        {title}
+                    </p> */}
+
+                    {item.character && (
+                        <p className="mt-1 line-clamp-1 text-xs text-white/75">
+                            as {item.character}
+                        </p>
+                    )}
                 </div>
-            ) : (
-                <img
-                    src={getPoster(item.poster_path || item.profile_path)}
-                    alt={item.title || item.name}
-                    onError={() => setImgError(true)}
-                    className="w-full h-[225px] object-cover rounded-xl
-                               bg-gray-200 dark:bg-zinc-700
-                               group-hover:scale-105 transition"
-                />
-            )}
+
+                {isMediaCard && showQuickActions && (
+                    <div className="absolute inset-x-0 bottom-0 z-20 flex translate-y-0 items-end justify-between gap-2 p-3 opacity-100 transition duration-200 sm:translate-y-4 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100">
+                        <button
+                            type="button"
+                            onClick={openWatchlistModal}
+                            className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold shadow-sm backdrop-blur-sm transition ${isAlreadyAdded
+                                ? "bg-black/70 text-white"
+                                : "bg-white/90 text-black hover:bg-white"
+                                }`}
+                        >
+                            {isAlreadyAdded ? <FaCheck size={11} /> : <FaPlus size={11} />}
+                            {/* {isAlreadyAdded ? "Saved" : "Watchlist"} */}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleFavoriteAction}
+                            className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold shadow-sm backdrop-blur-sm transition ${isFavorite
+                                ? "bg-rose-600 text-white"
+                                : "bg-black/70 text-white hover:bg-black"
+                                }`}
+                        >
+                            <FaHeart size={11} />
+                            {/* {isFavorite ? "Favorited" : "Favorite"} */}
+                        </button>
+                    </div>
+                )}
+            </div>
 
             {showTitle && (
-                <p className="mt-2 text-sm text-center line-clamp-2
-                              text-black dark:text-white
-                              group-hover:font-semibold transition-all">
-                    {item.title || item.name}
-                </p>
-            )}
-
-            {item.character && (
-                <p className="mt-1 text-xs text-center text-gray-500 dark:text-gray-400 line-clamp-1">
-                    as {item.character}
+                <p className="mt-2 line-clamp-2 text-sm text-center text-black transition-all group-hover:font-semibold dark:text-white">
+                    {title}
                 </p>
             )}
         </div>
@@ -412,25 +549,32 @@ export function EpisodeTableHorizontal({ seasonColumns }) {
    The last item is always rendered as plain bold text since it's the current page. */
 export function BreadCrumbs({ paths = [], overlay = true }) {
     const wrapperClass = overlay
-        ? "absolute z-10 top-4 left-4 sm:top-6 sm:left-6 md:top-8 md:left-12 lg:top-8 lg:left-56 text-sm text-white/90 flex items-center gap-2 flex-wrap"
-        : "flex items-center gap-1.5 text-xs text-black/50 dark:text-white/40 mb-6 flex-wrap";
+        ? "absolute z-10 top-4 left-4 sm:top-6 sm:left-6 md:top-8 md:left-12 lg:top-8 lg:left-56"
+        : "mb-4 sm:mb-6";
+
+    // Keep the back control compact and readable across overlay and inline layouts.
+    const backButtonClass = overlay
+        ? "inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/35 px-3 py-2 text-sm font-medium text-white shadow-sm backdrop-blur-sm transition hover:bg-black/50 focus:outline-none focus:ring-2 focus:ring-white/60"
+        : "inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-black/20 hover:text-black focus:outline-none focus:ring-2 focus:ring-black/20 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-white/20 dark:hover:text-white dark:focus:ring-white/20";
 
     return (
         <div className={wrapperClass}>
             <button
+                type="button"
                 onClick={() => window.history.back()}
-                className={overlay
-                    ? "hover:underline"
-                    : "hover:text-black dark:hover:text-white transition"
-                }
+                className={backButtonClass}
+                aria-label="Go back"
             >
-                <ArrowLeft size={16} className={` ${overlay ? "text-white/90" : "text-black/50 dark:text-white/40"} text-xs cursor-pointer`} />
+                <ArrowLeft
+                    size={16}
+                    className={overlay ? "text-white" : "text-current"}
+                />
+                <span className="truncate">Back</span>
             </button>
-            {paths.map((item, index) => {
+            {false && paths.map((item, index) => {
                 const isLast = index === paths.length - 1;
                 return (
                     <span key={index} className="flex items-center gap-1.5 sm:gap-2">
-                        {/* Render a link for all items except the last one. */}
                         {item.to && !isLast ? (
                             <Link
                                 to={item.to}
@@ -458,7 +602,7 @@ export function BreadCrumbs({ paths = [], overlay = true }) {
 }
 
 /* Responsive multi-line grid of cards with a title, icon, and loading state. */
-export function Grid({ title, items, onSelect, loading, showType, icon, iconColor }) {
+export function Grid({ title, items, onSelect, loading, showType, icon, iconColor, watchlistIds }) {
     return (
         <div className="mt-2">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-black dark:text-white">
@@ -477,6 +621,7 @@ export function Grid({ title, items, onSelect, loading, showType, icon, iconColo
                                 item={item}
                                 onClick={() => onSelect(item)}
                                 showType={showType}
+                                watchlistIds={watchlistIds}
                             />
                         ))
                 }

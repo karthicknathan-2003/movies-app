@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { tmdb } from "@/api/tmdb";
 import { BreadCrumbs, DetailPageSkeleton, Row } from "@/utils/helper";
+import { useWatchlistIds } from "@/components/hooks/useWatchlistIds";
 
 import {
     FaBirthdayCake,
@@ -20,6 +21,7 @@ export default function PersonDetails() {
 
     const { id } = useParams();
     const navigate = useNavigate();
+    const watchlistIds = useWatchlistIds();
 
     /* Fetch actor details and derive their sorted filmography on mount.
        Re-runs when the route param changes e.g. navigating between celebrities. */
@@ -33,9 +35,10 @@ export default function PersonDetails() {
                 const actorData = actorRes.data;
                 setActor(actorData);
 
-                // Sort combined credits by rating descending so the best work appears first.
-                const sortedMovies = actorData.combined_credits?.cast
-                    ?.sort((a, b) => b.vote_average - a.vote_average) ?? [];
+                // Keep the filmography movie-only so TV appearances do not clutter this page.
+                const sortedMovies = (actorData.combined_credits?.cast ?? [])
+                    .filter((credit) => credit.media_type === "movie")
+                    .sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
 
                 setMovies(sortedMovies);
             } catch {
@@ -67,7 +70,6 @@ export default function PersonDetails() {
     if (!actor) return <p className="text-center mt-10">Actor not found.</p>;
 
     return (
-        window.scrollTo(0, 0),
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
             {/* Hero backdrop — uses the actor's profile photo, overlaid with a dark scrim. */}
             <div
@@ -138,14 +140,15 @@ export default function PersonDetails() {
                         </div>
                     </div>
 
-                    {/* Known For row — sorted by rating so the actor's best work appears first. */}
+                    {/* Movie-only row keeps the celebrity page focused and easier to scan. */}
                     <Row
-                        title="Known For"
+                        title="Movies"
                         items={movies}
                         loading={loading}
-                        showType={true}
+                        showType={false}
                         icon={<FaFilm />}
                         iconColor="text-blue-500"
+                        watchlistIds={watchlistIds}
                         onSelect={handleSelect}
                     />
                 </div>

@@ -1,12 +1,15 @@
 import axios from "axios";
 import { serverStatusRef } from "../utils/statusRef";
 import { toast } from "sonner";
-import { clearStoredSession, readToken } from "@/utils/authSession";
+import { navigationRef } from "@/utils/navigation";
+import { clearStoredSession, saveRedirectAfterLogin } from "@/utils/authSession";
 
 // Base Axios instance for all TMDB-proxied requests through the backend.
 // Centralizing this means the base URL only needs to be changed in one place.
 export const tmdb = axios.create({
-  baseURL: import.meta.env.VITE_TMDB_API_URL || "http://localhost:8080/api/tmdb",
+  baseURL: import.meta.env.VITE_TMDB_API_URL,
+  // Public reads can still work, but credentials keep optional user-specific state available.
+  withCredentials: true,
 });
 
 /**
@@ -15,16 +18,8 @@ export const tmdb = axios.create({
  * so all authenticated requests attach the Bearer token automatically.
  */
 export const watchlistGroupApi = axios.create({
-  baseURL: `${import.meta.env.VITE_WATCHLIST_API_URL || "http://localhost:8080/api/watchlist"}/groups`,
-});
-
-// Attach the JWT token to every outgoing request if one exists in localStorage.
-watchlistGroupApi.interceptors.request.use((config) => {
-  const token = readToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  baseURL: `${import.meta.env.VITE_WATCHLIST_API_URL}/groups`,
+  withCredentials: true,
 });
 
 // Handle 401 responses — clear stale session and redirect to login.
@@ -32,22 +27,13 @@ watchlistGroupApi.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
+      saveRedirectAfterLogin(window.location.pathname + window.location.search);
       clearStoredSession();
-      window.location.href = "/login";
+      navigationRef.navigate?.("/login", { replace: true });
     }
     return Promise.reject(error);
   }
 );
-
-// Attach the JWT token to every outgoing TMDB request if one exists in localStorage.
-// This means callers never need to manually pass the Authorization header.
-tmdb.interceptors.request.use((config) => {
-  const token = readToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
 
 // Global error handler for all TMDB requests.
 // Maps network failures and HTTP error codes to structured error states
@@ -90,8 +76,9 @@ tmdb.interceptors.response.use(
     } else if (status === 401) {
       // 401 means the JWT token is missing, expired, or invalid.
       // Clear the stale session so the user is prompted to log in again.
+      saveRedirectAfterLogin(window.location.pathname + window.location.search);
       clearStoredSession();
-      window.location.href = "/login";
+      navigationRef.navigate?.("/login", { replace: true });
       toast.error("Session expired. Please log in again.");
     } else if (status >= 500) {
       // 5xx errors indicate an unrecoverable failure on the server side.

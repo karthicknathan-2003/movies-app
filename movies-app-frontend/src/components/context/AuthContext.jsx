@@ -1,4 +1,4 @@
-import { googleLogin, loginUser, registerUser } from "@/api/authService";
+import { googleLogin, loginUser, logoutUser, registerUser } from "@/api/authService";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { clearStoredSession, persistSession, readStoredSession } from "@/utils/authSession";
@@ -17,12 +17,13 @@ export function AuthProvider({ children }) {
     });
 
     // Persist a successful auth response.
-    const persist = useCallback((userName, fullName, jwt) => {
-        persistSession({ token: jwt, userName, fullName });
+    const persist = useCallback((userName, fullName) => {
+        // The backend stores the JWT in an HttpOnly cookie, so only user-facing identity is cached here.
+        persistSession({ userName, fullName });
         setSession({
             user: userName,
             fullName,
-            token: jwt,
+            token: null,
         });
     }, []);
 
@@ -33,8 +34,8 @@ export function AuthProvider({ children }) {
     const loginWithGoogle = useCallback(async (credential) => {
         try {
             const res = await googleLogin(credential);
-            const { token: jwt, fullName, userName } = res.data;
-            persist(userName, fullName, jwt);
+            const { fullName, userName } = res.data;
+            persist(userName, fullName);
         } catch (error) {
             const message = error.response?.data?.message || "Google sign-in failed. Please try again.";
             toast.error(message);
@@ -46,8 +47,8 @@ export function AuthProvider({ children }) {
     const login = useCallback(async (credentials) => {
         try {
             const res = await loginUser(credentials);
-            const { token: jwt, fullName, userName } = res.data;
-            persist(userName, fullName, jwt);
+            const { fullName, userName } = res.data;
+            persist(userName, fullName);
         } catch (error) {
             const message = error.response?.data?.message || "Login failed. Please check your credentials.";
             toast.error(message);
@@ -66,20 +67,27 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    const logout = useCallback(() => {
-        clearStoredSession();
-        setSession({
-            user: null,
-            fullName: null,
-            token: null,
-        });
+    const logout = useCallback(async () => {
+        try {
+            // Ask the backend to expire the HttpOnly auth cookie before clearing local identity fields.
+            await logoutUser();
+        } catch {
+            // Even if the request fails, clearing local identity keeps the UI from appearing logged in.
+        } finally {
+            clearStoredSession();
+            setSession({
+                user: null,
+                fullName: null,
+                token: null,
+            });
+        }
     }, []);
 
     const value = useMemo(() => ({
         user: session.user,
         fullName: session.fullName,
         token: session.token,
-        isAuthenticated: Boolean(session.token),
+        isAuthenticated: Boolean(session.user),
         loginWithGoogle,
         login,
         register,

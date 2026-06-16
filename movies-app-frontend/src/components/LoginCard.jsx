@@ -15,6 +15,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "./context/AuthContext";
 import { toast } from "sonner";
 import { AuthDivider } from "@/utils/helper";
+import { consumeRedirectAfterLogin } from "@/utils/authSession";
 
 export default function LoginCard() {
     const [loading, setLoading] = useState(false);
@@ -51,7 +52,7 @@ export default function LoginCard() {
         try {
             await login(credentials);
             toast.success("Welcome back!");
-            navigate("/");
+            navigate(consumeRedirectAfterLogin() || "/");
         } catch (error) {
             console.error(error);
         } finally {
@@ -66,7 +67,7 @@ export default function LoginCard() {
             try {
                 await loginWithGoogle(response.credential);
                 toast.success("Signed in successfully!");
-                navigate("/");
+                navigate(consumeRedirectAfterLogin() || "/");
             } catch (error) {
                 console.error(error);
             } finally {

@@ -15,7 +15,6 @@ import {
     FaClock,
     FaGlobe,
     FaPlus,
-    FaStar,
     FaHeart,
     FaShareAlt,
     FaFilm,
@@ -26,9 +25,18 @@ import { useWatchlist } from "./hooks/useWatchlist";
 import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
-import { watchlistApi } from "@/api/watchlist";
+import PersonalStarRating from "@/components/PersonalStarRating";
+import { updatePersonalRating, watchlistApi } from "@/api/watchlist";
 import UserReviews from "./UserReviews";
 import WatchProviders from "./WatchProviders";
+import { useWatchlistIds } from "./hooks/useWatchlistIds";
+
+const getApiErrorMessage = (error, fallbackMessage) => {
+    // Prefer the backend message so validation failures are easier to debug from the UI.
+    return error?.response?.data?.message || fallbackMessage;
+};
+
+const isNotFoundError = (error) => error?.response?.status === 404;
 
 export default function MovieDetails() {
     const { id } = useParams();
@@ -38,13 +46,16 @@ export default function MovieDetails() {
     const [credits, setCredits] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+    const [similarTitles, setSimilarTitles] = useState([]);
     const [isInWatchlist, setIsInWatchlist] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
+    const [personalRating, setPersonalRating] = useState(null);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalItem, setModalItem] = useState(null);
 
     const { addToWatchlist, updateFavorite } = useWatchlist();
+    const watchlistIds = useWatchlistIds();
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -52,13 +63,18 @@ export default function MovieDetails() {
             setLoading(true);
             setError(false);
             try {
-                const [movieRes, creditRes] = await Promise.all([
+                const [movieRes, creditRes, similarRes] = await Promise.all([
                     tmdb.get("/details", { params: { type: "MOVIE", id } }),
                     tmdb.get("/credits", { params: { type: "MOVIE", id } }),
+                    tmdb.get("/similar", { params: { type: "MOVIE", id } }),
                 ]);
                 const movieData = movieRes.data;
                 setMovie(movieData);
                 setCredits(creditRes.data);
+                setSimilarTitles((similarRes.data?.results ?? []).slice(0, 10).map((item) => ({
+                    ...item,
+                    media_type: "movie",
+                })));
 
                 try {
                     const watchlistRes = await watchlistApi.get(`/${movieData.id}/status`, {
@@ -67,13 +83,22 @@ export default function MovieDetails() {
                     if (watchlistRes?.data?.inWatchlist) {
                         setIsInWatchlist(true);
                         setIsFavorite(watchlistRes.data.favorite);
+                        setPersonalRating(watchlistRes.data.personalRating ?? null);
+                    } else {
+                        setPersonalRating(null);
                     }
                 } catch (e) {
-                    if (e.response?.status !== 404) console.error("Watchlist status check failed:", e);
+                    // Only a true 404 means "not in watchlist"; auth failures are handled globally.
+                    if (!isNotFoundError(e)) {
+                        console.error("Watchlist status check failed:", e);
+                        return;
+                    }
                     setIsInWatchlist(false);
                     setIsFavorite(false);
+                    setPersonalRating(null);
                 }
-            } catch {
+            } catch (requestError) {
+                console.error("Movie details load failed:", requestError);
                 setError(true);
             } finally {
                 setLoading(false);
@@ -84,6 +109,10 @@ export default function MovieDetails() {
 
     /* Open the modal — on close, re-check watchlist status so the button updates. */
     const handleWatchlist = useCallback(() => {
+        if (!movie?.id || !movie?.title) {
+            toast.error("Movie details are still loading. Please try again.");
+            return;
+        }
         if (!isLoggedIn()) {
             sessionStorage.setItem("redirectAfterLogin", `/movies/${movie.id}`);
             toast.error("Please log in to manage your watchlist.");
@@ -106,38 +135,93 @@ export default function MovieDetails() {
             const res = await watchlistApi.get(`/${movie.id}/status`);
             setIsInWatchlist(res?.data?.inWatchlist ?? false);
             setIsFavorite(res?.data?.favorite ?? false);
-        } catch {
-            // 404 means still not in watchlist — keep current state.
+            setPersonalRating(res?.data?.personalRating ?? null);
+        } catch (error) {
+            // Only clear local watchlist state when the title truly is not saved.
+            if (isNotFoundError(error)) {
+                setIsInWatchlist(false);
+                setIsFavorite(false);
+                setPersonalRating(null);
+            }
         }
     }, [movie]);
 
     const handleFavorite = useCallback(async () => {
+        if (!movie?.id || !movie?.title) {
+            toast.error("Movie details are still loading. Please try again.");
+            return;
+        }
         if (!isLoggedIn()) {
             sessionStorage.setItem("redirectAfterLogin", `/movies/${movie.id}`);
             toast.error("Please log in to manage your favorites.");
             return;
         }
-        if (isFavorite) {
-            await updateFavorite(movie.id, false);
-            setIsFavorite(false);
-            toast.success("Removed from favorites, still in watchlist.");
-            return;
-        }
-        if (isInWatchlist && !isFavorite) {
-            await updateFavorite(movie.id, true);
+        try {
+            if (isFavorite) {
+                await updateFavorite(movie.id, false);
+                setIsFavorite(false);
+                toast.success("Removed from favorites, still in watchlist.");
+                return;
+            }
+            if (isInWatchlist && !isFavorite) {
+                await updateFavorite(movie.id, true);
+                setIsFavorite(true);
+                toast.success("Added to favorites.");
+                return;
+            }
+            await addToWatchlist({ id: movie.id, title: movie.title, favorite: true, mediaType: "movie" });
+            setIsInWatchlist(true);
             setIsFavorite(true);
             toast.success("Added to favorites.");
-            return;
+        } catch (favoriteError) {
+            console.error("Favorite update failed:", favoriteError);
+            toast.error(getApiErrorMessage(favoriteError, "Could not update favorite."));
         }
-        await addToWatchlist({ id: movie.id, title: movie.title, favorite: true, mediaType: "movie" });
-        setIsInWatchlist(true);
-        setIsFavorite(true);
-        toast.success("Added to favorites.");
     }, [movie, isInWatchlist, isFavorite, addToWatchlist, updateFavorite]);
 
     const handleShare = useCallback(() => {
+        if (!movie?.title) {
+            toast.error("Movie details are still loading. Please try again.");
+            return;
+        }
         navigator.share?.({ title: movie.title, url: window.location.href });
     }, [movie]);
+
+    const handleRatingChange = useCallback(async (nextRating) => {
+        if (!movie) return;
+        if (nextRating != null && (nextRating < 1 || nextRating > 5)) {
+            toast.error("Rating must be between 1 and 5.");
+            return;
+        }
+
+        if (!isLoggedIn()) {
+            sessionStorage.setItem("redirectAfterLogin", `/movies/${movie.id}`);
+            toast.error("Please log in to rate this title.");
+            return;
+        }
+
+        if (!isInWatchlist) {
+            toast.error("Add this title to your watchlist to save a rating.");
+            setModalItem({
+                movieId: movie.id,
+                movieTitle: movie.title,
+                mediaType: "movie",
+                posterPath: movie.poster_path,
+            });
+            setModalOpen(true);
+            return;
+        }
+
+        const previousRating = personalRating;
+        setPersonalRating(nextRating);
+        try {
+            await updatePersonalRating(movie.id, nextRating);
+        } catch (errorState) {
+            console.error("Personal rating update failed:", errorState);
+            setPersonalRating(previousRating);
+            toast.error(getApiErrorMessage(errorState, "Could not save your rating."));
+        }
+    }, [isInWatchlist, movie, personalRating]);
 
     if (loading) return <DetailPageSkeleton />;
     if (error) return <p className="text-center mt-10 text-red-500">Failed to load movie. Please refresh.</p>;
@@ -147,7 +231,6 @@ export default function MovieDetails() {
     const producers = credits?.crew?.filter((c) => c.job === "Producer").map((p) => p.name);
     const topCast = credits?.cast?.slice(0, 12);
     return (
-        window.scrollTo(0, 0),
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
             <AddToWatchlistModal
                 open={modalOpen}
@@ -227,6 +310,11 @@ export default function MovieDetails() {
                                     {isInWatchlist ? <><FaCheck size={12} /> In Watchlist</> : <><FaPlus size={12} /> Watchlist</>}
                                 </button>
 
+                                <div className="flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 dark:border-white/10">
+                                    <span className="text-sm font-medium text-black/60 dark:text-white/60">Your rating</span>
+                                    <PersonalStarRating value={personalRating || 0} onChange={handleRatingChange} />
+                                </div>
+
                                 <button
                                     onClick={handleFavorite}
                                     className={`px-4 py-2 rounded-lg border text-sm font-medium flex items-center gap-1 transition-all duration-200
@@ -275,6 +363,17 @@ export default function MovieDetails() {
                         icon={<FaFilm />}
                         iconColor="text-blue-500"
                         onSelect={(item) => navigate(`/celebrities/${item.id}`)}
+                    />
+
+                    <Row
+                        title="Similar Titles"
+                        items={similarTitles}
+                        loading={loading}
+                        showType
+                        icon={<FaFilm />}
+                        iconColor="text-violet-500"
+                        watchlistIds={watchlistIds}
+                        onSelect={(item) => navigate(`/movies/${item.id}`)}
                     />
                 </div>
                 <UserReviews mediaType="MOVIE" />

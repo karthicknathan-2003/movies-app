@@ -10,7 +10,7 @@ import { FaClock, FaTrash } from "react-icons/fa";
  * @param {Array}    items    - from useRecentlyViewed().recentlyViewed
  * @param {Function} clearAll - from useRecentlyViewed().clearAll
  */
-export default function RecentlyViewed({ items, clearAll }) {
+export default function RecentlyViewed({ items, clearAll, watchlistIds }) {
     const navigate = useNavigate();
 
     if (!items || items.length === 0) return null;
@@ -50,6 +50,7 @@ export default function RecentlyViewed({ items, clearAll }) {
                             item={item}
                             showType={true}
                             showTitle={true}
+                            watchlistIds={watchlistIds}
                             onClick={() => handleSelect(item)}
                         />
                     </div>

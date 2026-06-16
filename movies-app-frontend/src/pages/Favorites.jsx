@@ -255,6 +255,7 @@ export default function Favorites() {
                                     }}
                                     showType
                                     showTitle
+                                    showQuickActions={false}
                                     onClick={() => handleCardClick(item)}
                                 />
 

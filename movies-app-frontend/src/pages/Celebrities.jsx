@@ -3,9 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { tmdb } from "../api/tmdb";
 import { Card, SkeletonCard, BreadCrumbs } from "@/utils/helper";
 import Pagination from "@/components/Pagination";
+import { FaSpinner } from "react-icons/fa";
+import { useInfiniteScrollTrigger } from "@/components/hooks/useInfiniteScrollTrigger";
+import { useAppSettings } from "@/components/context/AppSettingsContext";
 
 const TOTAL_PAGES = 20;
 const PAGE_SIZE = 20;
+
+const mergeById = (current, incoming) => {
+    const map = new Map(current.map((item) => [item.id, item]));
+    incoming.forEach((item) => map.set(item.id, item));
+    return Array.from(map.values());
+};
 
 export default function Celebrities() {
     const [people, setPeople] = useState([]);
@@ -14,13 +23,21 @@ export default function Celebrities() {
     const [page, setPage] = useState(1);
 
     const navigate = useNavigate();
+    const { defaultViewMode: viewMode } = useAppSettings();
 
     const goToCelebrity = useCallback((id) => navigate(`/celebrities/${id}`), [navigate]);
 
-    const handlePageChange = (p) => {
-        setPage(p);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+    const handlePageChange = (nextPage) => {
+        setPage(nextPage);
+        if (viewMode === "pagination") {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
     };
+
+    useEffect(() => {
+        setPeople([]);
+        setPage(1);
+    }, [viewMode]);
 
     useEffect(() => {
         const fetchPeople = async () => {
@@ -28,7 +45,10 @@ export default function Celebrities() {
             setError(false);
             try {
                 const res = await tmdb.get("/person/popular", { params: { page } });
-                setPeople(res.data.results ?? []);
+                const nextResults = res.data.results ?? [];
+                setPeople((current) =>
+                    viewMode === "infinite" && page > 1 ? mergeById(current, nextResults) : nextResults,
+                );
             } catch {
                 setError(true);
             } finally {
@@ -36,12 +56,18 @@ export default function Celebrities() {
             }
         };
         fetchPeople();
-    }, [page]);
+    }, [page, viewMode]);
+
+    const infiniteSentinelRef = useInfiniteScrollTrigger({
+        enabled: viewMode === "infinite",
+        loading,
+        hasMore: page < TOTAL_PAGES,
+        onLoadMore: () => setPage((current) => current + 1),
+    });
 
     return (
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-
                 <BreadCrumbs
                     overlay={false}
                     paths={[
@@ -51,9 +77,13 @@ export default function Celebrities() {
                     ]}
                 />
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-6">
                     <h1 className="text-2xl sm:text-3xl font-bold">Popular Celebrities</h1>
-                    <Pagination page={page} totalPages={TOTAL_PAGES} onPageChange={handlePageChange} />
+                    <div className="flex flex-wrap items-center gap-3">
+                        {viewMode === "pagination" && (
+                            <Pagination page={page} totalPages={TOTAL_PAGES} onPageChange={handlePageChange} />
+                        )}
+                    </div>
                 </div>
 
                 {error && (
@@ -63,8 +93,8 @@ export default function Celebrities() {
                 )}
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
-                    {loading
-                        ? Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)
+                    {loading && people.length === 0
+                        ? Array.from({ length: 12 }).map((_, index) => <SkeletonCard key={index} />)
                         : people.map((person, index) => (
                             <div
                                 key={person.id}
@@ -81,7 +111,9 @@ export default function Celebrities() {
                                     showTitle={false}
                                 />
                                 <div className="text-center mt-2">
-                                    <span className="font-bold">{(page - 1) * PAGE_SIZE + index + 1}</span>
+                                    <span className="font-bold">
+                                        {viewMode === "infinite" ? index + 1 : ((page - 1) * PAGE_SIZE) + index + 1}
+                                    </span>
                                     <p className="text-sm font-medium line-clamp-2">{person.name}</p>
                                     <p className="text-xs opacity-60">{person.known_for_department}</p>
                                 </div>
@@ -90,9 +122,19 @@ export default function Celebrities() {
                     }
                 </div>
 
-                {!loading && people.length > 0 && (
+                {viewMode === "pagination" && !loading && people.length > 0 && (
                     <div className="flex justify-center mt-10">
                         <Pagination page={page} totalPages={TOTAL_PAGES} onPageChange={handlePageChange} />
+                    </div>
+                )}
+
+                {viewMode === "infinite" && page < TOTAL_PAGES && (
+                    <div ref={infiniteSentinelRef} className="flex justify-center py-8">
+                        {loading && people.length > 0 ? (
+                            <FaSpinner className="animate-spin text-black/35 dark:text-white/35" />
+                        ) : (
+                            <span className="text-xs text-black/45 dark:text-white/45">Scroll for more</span>
+                        )}
                     </div>
                 )}
             </div>

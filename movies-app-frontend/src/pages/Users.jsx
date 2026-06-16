@@ -175,8 +175,8 @@ export default function Users() {
                 ]}
             />
 
-            <div className="flex items-center justify-between mb-8">
-                <div>
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                     <h1 className="text-2xl sm:text-3xl font-bold text-black dark:text-white mb-2">
                         {getTitle()}
                     </h1>
@@ -189,13 +189,13 @@ export default function Users() {
                 {(type === "followers" || type === "following") && (
                     <button
                         onClick={() => navigate(`/users/${username}`)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg
+                        className="flex w-full items-center justify-center gap-2 self-start rounded-lg px-4 py-2 text-sm
                                    bg-black/5 dark:bg-white/10
                                    hover:bg-black/10 dark:hover:bg-white/20
-                                   transition"
+                                   transition sm:w-auto"
                     >
                         <FaArrowLeft size={14} />
-                        <span>Back to Profile</span>
+                        <span className="whitespace-nowrap">Back to Profile</span>
                     </button>
                 )}
             </div>

@@ -9,6 +9,7 @@ import { watchlistApi } from "@/api/watchlist";
 import { Card, BreadCrumbs, useClickOutsideDropdown, EmptyState } from "@/utils/helper";
 import { FaChevronDown, FaFilter, FaTrash } from "react-icons/fa";
 import { watchlistGroupApi } from "@/api/tmdb";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const STATUS_META = {
     PLANNED: { label: "Planned", color: "bg-blue-600" },
@@ -31,6 +32,21 @@ const TYPE_OPTIONS = {
     movie: { label: "Movies" },
     tv: { label: "Series" },
 };
+
+function WatchlistGridSkeleton() {
+    return (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
+            {Array.from({ length: 12 }).map((_, index) => (
+                <div key={index} className="space-y-2">
+                    {/* Matching the final card shape avoids layout jumps while data loads. */}
+                    <Skeleton className="h-[225px] w-full rounded-xl" />
+                    <Skeleton className="mx-auto h-4 w-3/4 rounded-md" />
+                    <Skeleton className="h-9 w-full rounded-md" />
+                </div>
+            ))}
+        </div>
+    );
+}
 
 export default function Watchlist() {
     const { groupId } = useParams();
@@ -146,8 +162,6 @@ export default function Watchlist() {
     const displayItems = getDisplayItems();
     const filtersActive = sortMode !== "DEFAULT" || statusFilter !== "ALL" || typeFilter !== "ALL" || genreFilter !== "ALL";
 
-    if (loading) return <p className="text-center mt-10">Loading...</p>;
-
     return (
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
@@ -223,7 +237,9 @@ export default function Watchlist() {
                     )}
                 </div>
 
-                {displayItems.length === 0 && (
+                {loading && <WatchlistGridSkeleton />}
+
+                {!loading && displayItems.length === 0 && (
                     <EmptyState
                         icon="🍿"
                         title="Nothing here yet"
@@ -232,7 +248,7 @@ export default function Watchlist() {
                     />
                 )}
 
-                {displayItems.length !== 0 && (
+                {!loading && displayItems.length !== 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
                         {displayItems.map(item => (
                             <div
@@ -281,15 +297,18 @@ export default function Watchlist() {
                                     }}
                                     showType
                                     showTitle
+                                    showQuickActions={false}
                                     onClick={() => handleCardClick(item)}
                                 />
 
                                 {/* Remove button — sits below the title, full width, shown on hover. */}
+                                {/* Keep this button visible on mobile because touch devices do not have hover. */}
                                 <button
                                     onClick={(e) => handleRemove(e, item)}
-                                    className="mt-1 w-full flex items-center justify-center gap-1.5 py-1 rounded
-                                        text-[10px] font-medium text-red-500 hover:bg-red-500/10
-                                        opacity-0 group-hover:opacity-100 transition-all duration-150"
+                                    className="mt-2 flex min-h-9 w-full items-center justify-center gap-1.5
+                                        rounded-md border border-red-500/30 bg-red-500/5 px-2 py-2
+                                        text-[11px] font-medium text-red-500 transition-colors
+                                        hover:bg-red-500/10 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                                 >
                                     <FaTrash size={8} /> Remove
                                 </button>

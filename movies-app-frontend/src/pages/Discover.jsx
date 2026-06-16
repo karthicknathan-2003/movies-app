@@ -5,6 +5,9 @@ import { BreadCrumbs, Card, SkeletonCard } from "@/utils/helper";
 import Pagination from "@/components/Pagination";
 import { FaFilm, FaTv, FaSlidersH, FaTimes } from "react-icons/fa";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAppSettings } from "@/components/context/AppSettingsContext";
+import { useInfiniteScrollTrigger } from "@/components/hooks/useInfiniteScrollTrigger";
+import { useWatchlistIds } from "@/components/hooks/useWatchlistIds";
 
 /* Static data — TMDB genre IDs rarely change
    so hardcoding avoids an extra API call. */
@@ -71,6 +74,12 @@ const RATING_OPTIONS = [
     { value: "6", label: "6+ Decent" },
 ];
 
+const mergeById = (current, incoming) => {
+    const map = new Map(current.map((item) => [item.id, item]));
+    incoming.forEach((item) => map.set(item.id, item));
+    return Array.from(map.values());
+};
+
 
 // FilterChip — clickable pill for genre selection
 function FilterChip({ label, active, onClick }) {
@@ -106,6 +115,8 @@ export default function Discover() {
     const [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(false);
     const [filtersOpen, setFiltersOpen] = useState(false);
+    const { defaultViewMode: viewMode } = useAppSettings();
+    const watchlistIds = useWatchlistIds();
 
     const genres = mediaType === "movie" ? MOVIE_GENRES : TV_GENRES;
 
@@ -137,7 +148,10 @@ export default function Discover() {
                     },
                 });
                 if (!stale) {
-                    setResults(res.data.results ?? []);
+                    const nextResults = res.data.results ?? [];
+                    setResults((current) =>
+                        viewMode === "infinite" && page > 1 ? mergeById(current, nextResults) : nextResults,
+                    );
                     // Cap at 500 pages — TMDB's API limit
                     setTotalPages(Math.min(res.data.total_pages ?? 1, 500));
                 }
@@ -149,10 +163,15 @@ export default function Discover() {
         };
         fetch();
         return () => { stale = true; };
-    }, [mediaType, genreId, year, sortBy, minRating, page]);
+    }, [mediaType, genreId, year, sortBy, minRating, page, viewMode]);
 
     /* Reset to page 1 whenever any filter changes */
     useEffect(() => { setPage(1); }, [mediaType, genreId, year, sortBy, minRating]);
+
+    useEffect(() => {
+        setResults([]);
+        setPage(1);
+    }, [viewMode]);
 
     /* Navigation — route to correct detail page */
     const handleSelect = useCallback((item) => {
@@ -176,6 +195,13 @@ export default function Discover() {
     ].filter(Boolean).length;
 
     const activeGenre = genres.find(g => g.id === genreId);
+    const hasMore = page < Math.min(totalPages, 50);
+    const infiniteSentinelRef = useInfiniteScrollTrigger({
+        enabled: viewMode === "infinite",
+        loading,
+        hasMore,
+        onLoadMore: () => setPage((current) => current + 1),
+    });
 
     return (
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
@@ -260,7 +286,9 @@ export default function Discover() {
                             </button>
                         )}
 
-                        <Pagination page={page} totalPages={Math.min(totalPages, 50)} onPageChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+                        {viewMode === "pagination" && (
+                            <Pagination page={page} totalPages={Math.min(totalPages, 50)} onPageChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+                        )}
                     </div>
                 </div>
 
@@ -388,6 +416,7 @@ export default function Discover() {
                                         }}
                                         showType={true}
                                         showTitle={true}
+                                        watchlistIds={watchlistIds}
                                         onClick={() => handleSelect(item)}
                                     />
                                     <div className="text-center">
@@ -404,13 +433,23 @@ export default function Discover() {
                 </div>
 
                 {/* Bottom pagination */}
-                {!loading && results.length > 0 && (
+                {viewMode === "pagination" && !loading && results.length > 0 && (
                     <div className="flex justify-center mt-10">
                         <Pagination
                             page={page}
                             totalPages={Math.min(totalPages, 50)}
                             onPageChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                         />
+                    </div>
+                )}
+
+                {viewMode === "infinite" && hasMore && (
+                    <div ref={infiniteSentinelRef} className="flex justify-center py-8">
+                        {loading && results.length > 0 ? (
+                            <span className="text-xs text-black/45 dark:text-white/45">Loading more…</span>
+                        ) : (
+                            <span className="text-xs text-black/45 dark:text-white/45">Scroll for more</span>
+                        )}
                     </div>
                 )}
             </div>
