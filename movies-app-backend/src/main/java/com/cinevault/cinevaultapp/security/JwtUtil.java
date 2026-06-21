@@ -116,10 +116,15 @@ public class JwtUtil {
      * @return - serialized Set-Cookie header value.
      */
     public String createAuthCookie(String token, boolean secureRequest) {
+        // Cross-origin frontend -> backend API calls need SameSite=None on HTTPS,
+        // otherwise the browser will not attach the cookie to XHR/fetch requests.
+        String sameSitePolicy = secureRequest ? "None" : "Lax";
         return ResponseCookie.from(AUTH_COOKIE_NAME, token)
                 .httpOnly(true)
+                // Browsers only accept SameSite=None cookies when they are also marked Secure.
                 .secure(secureRequest)
-                .sameSite("Lax")
+                .sameSite(sameSitePolicy)
+                // Keep the cookie available to the whole API surface after login.
                 .path("/")
                 .maxAge(Duration.ofMillis(expiration))
                 .build()
@@ -134,10 +139,13 @@ public class JwtUtil {
      * @return - serialized Set-Cookie header value that expires the cookie immediately.
      */
     public String clearAuthCookie(boolean secureRequest) {
+        // Use the same SameSite policy as the auth cookie so browsers match and clear it reliably.
+        String sameSitePolicy = secureRequest ? "None" : "Lax";
         return ResponseCookie.from(AUTH_COOKIE_NAME, "")
                 .httpOnly(true)
+                // Mirror the original cookie attributes so logout removes the same browser cookie.
                 .secure(secureRequest)
-                .sameSite("Lax")
+                .sameSite(sameSitePolicy)
                 .path("/")
                 .maxAge(Duration.ZERO)
                 .build()

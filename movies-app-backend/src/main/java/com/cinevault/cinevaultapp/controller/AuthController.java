@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+    private static final String HTTPS = "https";
 
     @Autowired
     private AuthServices authService;
@@ -56,7 +57,7 @@ public class AuthController {
         return ResponseEntity.ok()
                 // The JWT now travels in an HttpOnly cookie instead of browser-readable storage.
                 .header(HttpHeaders.SET_COOKIE,
-                        jwtUtil.createAuthCookie(response.getToken(), request.isSecure()))
+                        jwtUtil.createAuthCookie(response.getToken(), isSecureRequest(request)))
                 .body(new AuthResponseDto(response.getUserName(), response.getFullName(), null));
     }
 
@@ -72,7 +73,7 @@ public class AuthController {
         AuthResponseDto response = authService.authenticateWithGoogle(request.getCredential());
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE,
-                        jwtUtil.createAuthCookie(response.getToken(), httpRequest.isSecure()))
+                        jwtUtil.createAuthCookie(response.getToken(), isSecureRequest(httpRequest)))
                 .body(new AuthResponseDto(response.getUserName(), response.getFullName(), null));
     }
 
@@ -84,7 +85,29 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request) {
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, jwtUtil.clearAuthCookie(request.isSecure()))
+                .header(HttpHeaders.SET_COOKIE, jwtUtil.clearAuthCookie(isSecureRequest(request)))
                 .build();
+    }
+
+    /**
+     * Determines whether the original client request was made over HTTPS.
+     *
+     * <p>In many cloud environments, HTTPS/TLS is terminated by a reverse proxy,
+     * load balancer, or ingress gateway before the request reaches the application.
+     * These components typically forward the original protocol using standard
+     * forwarding headers such as "X-Forwarded-Proto".<p/>
+     *
+     * <p>This check ensures cookies can be marked as Secure when the client
+     * accessed the application via HTTPS, even if the backend itself receives
+     * the request over plain HTTP.<p/>
+     *
+     * @param request The incoming HTTP request.
+     *
+     * @return True if the original client request used HTTPS; otherwise false.
+     */
+    private boolean isSecureRequest(HttpServletRequest request) {
+        // Render and similar platforms forward the original protocol in this header after TLS termination.
+        String forwardedProto = request.getHeader("X-Forwarded-Proto");
+        return request.isSecure() || HTTPS.equalsIgnoreCase(forwardedProto);
     }
 }
