@@ -75,6 +75,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/watchlist/**").authenticated()
                         .requestMatchers("/api/notifications/**").authenticated()
                         .requestMatchers("/api/reviews/**").authenticated()
+                        // "Me" routes use Authentication.getName() directly (no null-check),
+                        // so they MUST stay authenticated. Declared before the public wildcard
+                        // below — Spring Security matches rules in order, first match wins.
+                        .requestMatchers(HttpMethod.GET, "/api/users/me", "/api/users/me/**").authenticated()
+                        // Public profile browsing — lets logged-out visitors view profiles,
+                        // follower/following lists, and stats (UserController already handles
+                        // a null Authentication gracefully for these routes).
+                        .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

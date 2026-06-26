@@ -14,12 +14,23 @@ export const watchlistApi = axios.create({
   withCredentials: true,
 });
 
+// Some screens make optional watchlist probes to enrich an otherwise public page.
+// Those requests should fail quietly for logged-out visitors instead of forcing a login redirect.
+export const optionalAuthRequestConfig = {
+  suppressAuthRedirect: true,
+};
+
 // Global error handler for all watchlist requests.
 // Handles authentication errors by clearing session and redirecting to login.
 watchlistApi.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
+      // Allow callers to opt out when auth is only being checked to decorate a public screen.
+      if (error.config?.suppressAuthRedirect) {
+        return Promise.reject(error);
+      }
+
       // 401 means the JWT token is missing, expired, or invalid.
       // Clear both token and user so the app treats the session as fully ended.
       clearStoredSession();

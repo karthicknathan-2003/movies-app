@@ -8,7 +8,7 @@ import { useWatchlist } from "./hooks/useWatchlist";
 import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
 import PersonalStarRating from "@/components/PersonalStarRating";
-import { getEpisodeProgress, updateEpisodeProgress, updatePersonalRating, watchlistApi } from "@/api/watchlist";
+import { getEpisodeProgress, optionalAuthRequestConfig, updateEpisodeProgress, updatePersonalRating, watchlistApi } from "@/api/watchlist";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
 import UserReviews from "./UserReviews";
 import EpisodeProgressTable from "@/components/EpisodeProgressTable";
@@ -64,7 +64,7 @@ export default function AnimeDetails() {
                 );
 
                 try {
-                    const watchlistRes = await watchlistApi.get(`/${showData.id}/status`);
+                    const watchlistRes = await watchlistApi.get(`/${showData.id}/status`, optionalAuthRequestConfig);
                     if (watchlistRes?.data?.inWatchlist) {
                         setIsInWatchlist(true);
                         setIsFavorite(watchlistRes.data.favorite);

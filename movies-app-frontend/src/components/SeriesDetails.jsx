@@ -7,7 +7,7 @@ import { useWatchlist } from "./hooks/useWatchlist";
 import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
 import PersonalStarRating from "@/components/PersonalStarRating";
-import { getEpisodeProgress, updateEpisodeProgress, updatePersonalRating, watchlistApi } from "@/api/watchlist";
+import { getEpisodeProgress, optionalAuthRequestConfig, updateEpisodeProgress, updatePersonalRating, watchlistApi } from "@/api/watchlist";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
 import UserReviews from "./UserReviews";
 import WatchProviders from "./WatchProviders";
@@ -68,7 +68,7 @@ export default function SeriesDetails() {
                 );
 
                 try {
-                    const watchlistRes = await watchlistApi.get(`/${showData.id}/status`);
+                    const watchlistRes = await watchlistApi.get(`/${showData.id}/status`, optionalAuthRequestConfig);
                     if (watchlistRes?.data?.inWatchlist) {
                         setIsInWatchlist(true);
                         setIsFavorite(watchlistRes.data.favorite);
@@ -77,6 +77,14 @@ export default function SeriesDetails() {
                         setPersonalRating(null);
                     }
                 } catch (watchlistError) {
+                    // Logged-out visitors should still see the public series details page.
+                    if (watchlistError?.response?.status === 401) {
+                        setIsInWatchlist(false);
+                        setIsFavorite(false);
+                        setPersonalRating(null);
+                        return;
+                    }
+
                     if (!isNotFoundError(watchlistError)) {
                         console.error("Watchlist status check failed:", watchlistError);
                         return;

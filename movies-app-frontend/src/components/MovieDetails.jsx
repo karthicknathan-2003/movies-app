@@ -26,7 +26,7 @@ import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
 import PersonalStarRating from "@/components/PersonalStarRating";
-import { updatePersonalRating, watchlistApi } from "@/api/watchlist";
+import { optionalAuthRequestConfig, updatePersonalRating, watchlistApi } from "@/api/watchlist";
 import UserReviews from "./UserReviews";
 import WatchProviders from "./WatchProviders";
 import { useWatchlistIds } from "./hooks/useWatchlistIds";
@@ -78,6 +78,7 @@ export default function MovieDetails() {
 
                 try {
                     const watchlistRes = await watchlistApi.get(`/${movieData.id}/status`, {
+                        ...optionalAuthRequestConfig,
                         params: { groupId: movieData.groupId }
                     });
                     if (watchlistRes?.data?.inWatchlist) {
@@ -88,6 +89,14 @@ export default function MovieDetails() {
                         setPersonalRating(null);
                     }
                 } catch (e) {
+                    // Logged-out visitors can still open the page, so an optional auth probe must not block the details load.
+                    if (e?.response?.status === 401) {
+                        setIsInWatchlist(false);
+                        setIsFavorite(false);
+                        setPersonalRating(null);
+                        return;
+                    }
+
                     // Only a true 404 means "not in watchlist"; auth failures are handled globally.
                     if (!isNotFoundError(e)) {
                         console.error("Watchlist status check failed:", e);
