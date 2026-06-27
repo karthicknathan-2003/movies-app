@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { tmdb } from "../api/tmdb";
-import { BreadCrumbs, Card, SkeletonCard } from "@/utils/helper";
+import { BreadCrumbs, Card, SkeletonCard, SEVEN_COLUMN_CARD_GRID_CLASS } from "@/utils/helper";
 import { useNavigate } from "react-router-dom";
 import Pagination from "@/components/Pagination";
 import { FaSpinner } from "react-icons/fa";
@@ -8,6 +8,8 @@ import { useRecentlyViewed } from "@/components/hooks/useRecentlyViewed";
 import { useInfiniteScrollTrigger } from "@/components/hooks/useInfiniteScrollTrigger";
 import { useAppSettings } from "@/components/context/AppSettingsContext";
 import { useWatchlistIds } from "@/components/hooks/useWatchlistIds";
+import { useCatalogSearch } from "@/components/hooks/useCatalogSearch";
+import CatalogSearchInput from "@/components/CatalogSearchInput";
 
 const TOTAL_PAGES = 20;
 const PAGE_SIZE = 20;
@@ -25,6 +27,7 @@ export default function Anime() {
     const [page, setPage] = useState(1);
 
     const navigate = useNavigate();
+    const { query, setQuery, filtered } = useCatalogSearch(anime);
     const { addItem } = useRecentlyViewed();
     const { defaultViewMode: viewMode } = useAppSettings();
     const watchlistIds = useWatchlistIds();
@@ -45,6 +48,12 @@ export default function Anime() {
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
     };
+
+    useEffect(() => {
+        if (viewMode === "pagination") {
+            setPage(1);
+        }
+    }, [query, viewMode]);
 
     useEffect(() => {
         setAnime([]);
@@ -71,7 +80,7 @@ export default function Anime() {
     }, [page, viewMode]);
 
     const infiniteSentinelRef = useInfiniteScrollTrigger({
-        enabled: viewMode === "infinite",
+        enabled: viewMode === "infinite" && !query.trim(),
         loading,
         hasMore: page < TOTAL_PAGES,
         onLoadMore: () => setPage((current) => current + 1),
@@ -79,7 +88,7 @@ export default function Anime() {
 
     return (
         <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white">
-            <div className="max-w-6xl mx-auto p-6">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
                 <BreadCrumbs
                     overlay={false}
                     paths={[
@@ -89,14 +98,27 @@ export default function Anime() {
                     ]}
                 />
 
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
-                    <h1 className="text-3xl font-bold">Top Anime</h1>
-                    <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-col gap-3 mb-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <h1 className="text-2xl sm:text-3xl font-bold shrink-0">Top Anime</h1>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+                            <CatalogSearchInput
+                                value={query}
+                                onChange={(event) => setQuery(event.target.value)}
+                                placeholder="Search loaded anime..."
+                            />
                         {viewMode === "pagination" && (
                             <Pagination page={page} totalPages={TOTAL_PAGES} onPageChange={handlePageChange} />
                         )}
+                        </div>
                     </div>
-                </div>
+
+                    {viewMode === "infinite" && (
+                        <p className="text-xs text-black/50 dark:text-white/50">
+                            Infinite scroll is enabled from Settings and will keep loading more as you move down the page.
+                        </p>
+                    )}
+                    </div>
 
                 {error && (
                     <p className="text-center text-red-500 mb-6">
@@ -104,10 +126,16 @@ export default function Anime() {
                     </p>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-6">
+                {!loading && filtered.length === 0 && query.trim() && (
+                    <p className="text-center opacity-60 mt-10">
+                        No anime found for "{query}".
+                    </p>
+                )}
+
+                <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4 sm:gap-6`}>
                     {loading && anime.length === 0
                         ? Array.from({ length: 12 }).map((_, index) => <SkeletonCard key={index} />)
-                        : anime.map((item, index) => (
+                        : filtered.map((item, index) => (
                             <div key={item.id} className="group hover:scale-101 transition">
                                 <Card
                                     item={{ ...item, media_type: "tv" }}
@@ -134,7 +162,7 @@ export default function Anime() {
                     </div>
                 )}
 
-                {viewMode === "infinite" && page < TOTAL_PAGES && (
+                {viewMode === "infinite" && !query.trim() && page < TOTAL_PAGES && (
                     <div ref={infiniteSentinelRef} className="flex justify-center py-8">
                         {loading && anime.length > 0 ? (
                             <FaSpinner className="animate-spin text-black/35 dark:text-white/35" />

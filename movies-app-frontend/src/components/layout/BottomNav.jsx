@@ -9,8 +9,8 @@ const BottomNav = () => {
         { to: "/", icon: Home, label: "Home" },
         { to: "/search", icon: Search, label: "Search" },
         { to: "/catalog", icon: Box, label: "Catalog" },
+        { to: "/users", icon: Users, label: "Users" },
         ...(isAuthenticated ? [
-            { to: "/users", icon: Users, label: "Users" },
             { to: "/profile", icon: User, label: "Profile" }
         ] : []),
     ];

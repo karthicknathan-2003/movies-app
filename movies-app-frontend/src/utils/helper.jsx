@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
 import { useWatchlist } from "@/components/hooks/useWatchlist";
 import { watchlistApi } from "@/api/watchlist";
@@ -12,6 +13,7 @@ import { useEffect, useState } from "react";
 
 // Conversion rate used to display budgets and revenues in Indian Rupees.
 export const USD_TO_INR = 83;
+export const SEVEN_COLUMN_CARD_GRID_CLASS = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7";
 
 // Maps a rating value to a background and text color class for visual grading.
 export const getColor = (rating) => {
@@ -609,8 +611,7 @@ export function Grid({ title, items, onSelect, loading, showType, icon, iconColo
                 <span className={iconColor}>{icon}</span>
                 {title}
             </h2>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
+            <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4`}>
                 {loading
                     ? Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)
                     : items.length === 0
@@ -719,4 +720,26 @@ export function useClickOutsideDropdown() {
     }, [openDropdown]);
 
     return [openDropdown, setOpenDropdown];
+}
+
+/**
+ * Keeps the Google auth button in a consistent size and layout, while showing a loading state.
+ */
+export function GoogleAuthButtonShell({ loading, loadingText, children }) {
+    return (
+        <div className="w-full max-w-[320px]">
+            {loading ? (
+                <div
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-input bg-muted px-4 text-sm font-medium text-muted-foreground"
+                    aria-live="polite"
+                    aria-busy="true"
+                >
+                    <Spinner size={18} />
+                    {loadingText}
+                </div>
+            ) : (
+                children
+            )}
+        </div>
+    );
 }

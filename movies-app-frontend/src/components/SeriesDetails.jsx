@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { tmdb } from "../api/tmdb";
 import { BreadCrumbs, DetailPageSkeleton, Legend, Row } from "@/utils/helper";
 import { FaPlus, FaHeart, FaShareAlt, FaCheck, FaTv, FaFilm } from "react-icons/fa";
@@ -7,13 +7,14 @@ import { useWatchlist } from "./hooks/useWatchlist";
 import { isLoggedIn } from "@/api/authService";
 import { toast } from "sonner";
 import PersonalStarRating from "@/components/PersonalStarRating";
-import { getEpisodeProgress, optionalAuthRequestConfig, updateEpisodeProgress, updatePersonalRating, watchlistApi } from "@/api/watchlist";
+import { optionalAuthRequestConfig, updatePersonalRating, watchlistApi } from "@/api/watchlist";
 import AddToWatchlistModal from "@/components/AddToWatchlistModal";
 import UserReviews from "./UserReviews";
 import WatchProviders from "./WatchProviders";
 import EpisodeProgressTable from "@/components/EpisodeProgressTable";
 import EpisodeInsights from "@/components/EpisodeInsights";
 import { useWatchlistIds } from "./hooks/useWatchlistIds";
+import { useEpisodeProgressTracker } from "./hooks/useEpisodeProgressTracker";
 
 const getApiErrorMessage = (error, fallbackMessage) => {
     // Prefer the backend message so validation failures are easier to debug from the UI.
@@ -35,7 +36,6 @@ export default function SeriesDetails() {
     const [isInWatchlist, setIsInWatchlist] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
     const [personalRating, setPersonalRating] = useState(null);
-    const [episodeProgress, setEpisodeProgress] = useState([]);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalItem, setModalItem] = useState(null);
@@ -101,34 +101,6 @@ export default function SeriesDetails() {
             }
         };
         load();
-    }, [id]);
-
-    useEffect(() => {
-        if (!id || !isLoggedIn()) {
-            setEpisodeProgress([]);
-            return;
-        }
-
-        let ignore = false;
-
-        const loadProgress = async () => {
-            try {
-                const res = await getEpisodeProgress(id);
-                if (!ignore) {
-                    setEpisodeProgress(res.data ?? []);
-                }
-            } catch (progressError) {
-                console.error("Episode progress load failed:", progressError);
-                if (!ignore) {
-                    setEpisodeProgress([]);
-                }
-            }
-        };
-
-        loadProgress();
-        return () => {
-            ignore = true;
-        };
     }, [id]);
 
     const handleWatchlist = useCallback(() => {
@@ -255,64 +227,21 @@ export default function SeriesDetails() {
             / ((season.episodes ?? []).length || 1),
     }));
 
-    const watchedEpisodeKeys = useMemo(
-        () => new Set(episodeProgress.map((item) => `${item.seasonNumber}-${item.episodeNumber}`)),
-        [episodeProgress],
-    );
-    const totalEpisodeCount = seasonColumns.reduce(
-        (count, season) => count + (season.episodes?.length ?? 0),
-        0,
-    );
     const defaultEpisodeRuntime = show?.episode_run_time?.[0] || 0;
-    // Older progress rows may still have 0 runtime saved, so fall back to the series default when needed.
-    const trackedMinutes = episodeProgress.reduce(
-        (minutes, item) => minutes + (item.runtimeMinutes > 0 ? item.runtimeMinutes : defaultEpisodeRuntime),
-        0,
-    );
-
-    const handleEpisodeToggle = useCallback(async (episode, seasonNumber) => {
-        if (!episode?.episode_number || !seasonNumber) {
-            toast.error("Episode details are incomplete. Please refresh and try again.");
-            return;
-        }
-        if (!isLoggedIn()) {
-            sessionStorage.setItem("redirectAfterLogin", `/series/${id}`);
-            toast.error("Please log in to track episode progress.");
-            return;
-        }
-
-        const episodeKey = `${seasonNumber}-${episode.episode_number}`;
-        const isCurrentlyWatched = watchedEpisodeKeys.has(episodeKey);
-        const runtimeMinutes = Math.max(episode.runtime || defaultEpisodeRuntime || 0, 0);
-
-        try {
-            const res = await updateEpisodeProgress(id, {
-                seasonNumber,
-                episodeNumber: episode.episode_number,
-                episodeName: episode.name,
-                runtimeMinutes,
-                watched: !isCurrentlyWatched,
-            });
-
-            setEpisodeProgress((current) => {
-                if (isCurrentlyWatched) {
-                    return current.filter(
-                        (item) => !(item.seasonNumber === seasonNumber && item.episodeNumber === episode.episode_number),
-                    );
-                }
-
-                const withoutDuplicate = current.filter(
-                    (item) => !(item.seasonNumber === seasonNumber && item.episodeNumber === episode.episode_number),
-                );
-                return [...withoutDuplicate, res.data].sort(
-                    (left, right) => left.seasonNumber - right.seasonNumber || left.episodeNumber - right.episodeNumber,
-                );
-            });
-        } catch (progressError) {
-            console.error("Episode progress update failed:", progressError);
-            toast.error(getApiErrorMessage(progressError, "Could not update episode progress."));
-        }
-    }, [defaultEpisodeRuntime, id, watchedEpisodeKeys]);
+    const {
+        episodeProgress,
+        watchedEpisodeKeys,
+        seasonActionState,
+        totalEpisodeCount,
+        trackedMinutes,
+        handleEpisodeToggle,
+        handleSeasonToggle,
+    } = useEpisodeProgressTracker({
+        mediaId: id,
+        loginRedirectPath: `/series/${id}`,
+        seasonColumns,
+        defaultEpisodeRuntime,
+    });
 
     const director = credits?.crew?.filter((member) => member.job === "Director" || member.job === "Executive Producer").map((person) => person.name);
     const producers = credits?.crew?.filter((member) => member.job === "Producer").map((person) => person.name);
@@ -451,6 +380,8 @@ export default function SeriesDetails() {
                             seasonColumns={seasonColumns}
                             watchedEpisodeKeys={watchedEpisodeKeys}
                             onToggleWatched={handleEpisodeToggle}
+                            onToggleSeasonWatched={handleSeasonToggle}
+                            seasonActionState={seasonActionState}
                             defaultRuntimeMinutes={defaultEpisodeRuntime}
                         />
                         : <p className="mt-6 text-center text-gray-500 dark:text-gray-400">No episode data available.</p>

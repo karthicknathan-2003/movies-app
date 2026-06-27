@@ -31,7 +31,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/components/context/AuthContext";
 import { toast } from "sonner";
-import { BreadCrumbs } from "@/utils/helper";
+import { BreadCrumbs, SEVEN_COLUMN_CARD_GRID_CLASS } from "@/utils/helper";
 import { watchlistGroupApi } from "@/api/tmdb";
 import { getCurrentUserProfile, getMyActivity, getUserStats, updateUserProfile } from "@/api/userService";
 import ProfileEditModal from "@/components/ProfileEditModal";
@@ -114,8 +114,8 @@ function ProfileSkeleton() {
         <Skeleton className="h-[380px] rounded-2xl" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, index) => (
+      <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-3`}>
+        {Array.from({ length: 7 }).map((_, index) => (
           <Skeleton key={index} className="aspect-square rounded-xl" />
         ))}
       </div>
@@ -178,7 +178,7 @@ export default function Profile() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [activityItems, setActivityItems] = useState([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
-  const [activityOpen, setActivityOpen] = useState(true);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -701,7 +701,7 @@ export default function Profile() {
         </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-3`}>
             <button
               onClick={() => navigate("/profile/favorites")}
               className="aspect-square flex flex-col items-center justify-center gap-2 rounded-xl border

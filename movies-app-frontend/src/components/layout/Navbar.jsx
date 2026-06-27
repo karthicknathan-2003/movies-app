@@ -70,9 +70,7 @@ export function Navbar() {
                 <nav className="hidden md:flex items-center gap-2">
                     <NavLink to="/catalog" className={linkClass}>Catalog</NavLink>
                     <NavLink to="/search" className={linkClass}>Browse</NavLink>
-                    {isAuthenticated && (
-                        <NavLink to="/users" className={linkClass}>Users</NavLink>
-                    )}
+                    <NavLink to="/users" className={linkClass}>Users</NavLink>
                 </nav>
 
                 <div className="flex items-center gap-2 sm:gap-3">

@@ -21,17 +21,20 @@ function EpisodeProgressCell({
     useEffect(() => {
         if (!detailsOpen) return undefined;
 
+        // Close the mobile/desktop season action card when the user taps or clicks anywhere outside this AVG cell.
         const handleOutsideClick = (event) => {
             if (!event.target.closest("[data-episode-progress-cell]")) {
                 setDetailsOpen(false);
             }
         };
 
-        document.addEventListener("mousedown", handleOutsideClick);
-        document.addEventListener("touchstart", handleOutsideClick);
+        // Listen for both mouse and touch, so the outside-close behavior works on
+        // desktop clicks as well as phone/tablet taps.
+        document.addEventListener("pointerdown", handleOutsideClick);
         return () => {
-            document.removeEventListener("mousedown", handleOutsideClick);
-            document.removeEventListener("touchstart", handleOutsideClick);
+            // Remove the global listeners as soon as the panel closes or unmounts.
+            // So we do not leave stale document handlers.
+            document.removeEventListener("pointerdown", handleOutsideClick);
         };
     }, [detailsOpen]);
 
@@ -110,10 +113,16 @@ function EpisodeProgressCell({
 
 const CHUNK_SIZE = 20;
 
+/**
+ * Renders a table of episode progress for each season, with the ability to mark episodes or entire seasons as watched. 
+ * The table is divided into chunks of episodes for better readability, and it displays average ratings for each season.
+ */
 export default function EpisodeProgressTable({
     seasonColumns,
     watchedEpisodeKeys = new Set(),
     onToggleWatched,
+    onToggleSeasonWatched,
+    seasonActionState = {},
     defaultRuntimeMinutes = 0,
 }) {
     if (!seasonColumns || seasonColumns.length === 0) return null;
@@ -179,18 +188,126 @@ export default function EpisodeProgressTable({
                             })}
 
                             <td className="px-1 py-1">
-                                {row.avg != null ? (
-                                    <div className={`flex h-8 w-10 items-center justify-center rounded font-semibold ${getColor(row.avg)}`}>
-                                        {row.avg.toFixed(1)}
-                                    </div>
-                                ) : (
-                                    <div className="h-8 w-10" />
-                                )}
+                                <SeasonProgressCell
+                                    avg={row.avg}
+                                    seasonNumber={row.seasonNumber}
+                                    onToggleSeasonWatched={onToggleSeasonWatched}
+                                    actionState={seasonActionState[row.seasonNumber]}
+                                />
                             </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
+        </div>
+    );
+}
+
+
+/**
+ * A cell, that displayes the season average rating. And when clicked or hovered, 
+ * it shows a card with the option to mark the entire season as watched.
+ */
+function SeasonProgressCell({
+    avg,
+    seasonNumber,
+    onToggleSeasonWatched,
+    actionState,
+}) {
+    const [detailsOpen, setDetailsOpen] = useState(false);
+
+    useEffect(() => {
+        if (!detailsOpen) return undefined;
+
+        // Close the mobile/desktop season action card when the user taps or clicks anywhere outside this AVG cell.
+        const handleOutsideClick = (event) => {
+            if (!event.target.closest("[data-season-progress-cell]")) {
+                setDetailsOpen(false);
+            }
+        };
+
+        // Listen for both mouse and touch, so the outside-close behavior works on
+        // desktop clicks as well as phone/tablet taps.
+        document.addEventListener("pointerdown", handleOutsideClick);
+        return () => {
+            // Remove the global listeners as soon as the panel closes or unmounts.
+            // So we do not leave stale document handlers.
+            document.removeEventListener("pointerdown", handleOutsideClick);
+        };
+    }, [detailsOpen]);
+
+    if (avg == null) {
+        return <div className="h-8 w-10" />;
+    }
+
+    return (
+        <div className="group relative" data-season-progress-cell>
+            <button
+                type="button"
+                onClick={() => setDetailsOpen((value) => !value)}
+                className={`relative flex h-8 w-10 items-center justify-center rounded font-semibold ${getColor(avg)}`}
+                aria-label={`Season ${seasonNumber} average rating`}
+            >
+                {avg.toFixed(1)}
+                {actionState?.allWatched && (
+                    <span className="absolute bottom-0.5 right-0.5 h-2 w-2 rounded-full bg-emerald-500" />
+                )}
+            </button>
+
+            <div className="pointer-events-none absolute left-1/2 top-full z-30 hidden w-48 -translate-x-1/2 pt-2 md:block md:opacity-0 md:transition-opacity md:duration-150 md:group-hover:pointer-events-auto md:group-hover:opacity-100">
+                <div className="rounded-xl border border-black/10 bg-white/95 p-3 text-left text-[11px] shadow-lg backdrop-blur dark:border-white/10 dark:bg-zinc-950/95">
+                    <p className="font-semibold text-black dark:text-white">Season {seasonNumber}</p>
+                    <p className="mt-1 text-black/60 dark:text-white/60">Average rating: {avg.toFixed(1)}</p>
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleSeasonWatched?.(seasonNumber);
+                        }}
+                        disabled={!onToggleSeasonWatched || actionState?.disabled}
+                        className={`mt-2 w-full rounded-md px-2 py-1 font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            actionState?.allWatched
+                                ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-300"
+                                : "bg-black text-white hover:bg-black/85 dark:bg-white dark:text-black dark:hover:bg-white/85"
+                        }`}
+                    >
+                        {actionState?.loading
+                            ? "Updating..."
+                            : actionState?.allWatched
+                                ? "Season watched"
+                                : "Mark season watched"}
+                    </button>
+                </div>
+            </div>
+
+            {detailsOpen && (
+                <div className="absolute left-1/2 top-full z-40 w-48 -translate-x-1/2 pt-2 md:hidden">
+                    <div className="rounded-xl border border-black/10 bg-white/95 p-3 text-left text-[11px] shadow-lg backdrop-blur dark:border-white/10 dark:bg-zinc-950/95">
+                        <p className="font-semibold text-black dark:text-white">Season {seasonNumber}</p>
+                        <p className="mt-1 text-black/60 dark:text-white/60">Average rating: {avg.toFixed(1)}</p>
+                        <button
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onToggleSeasonWatched?.(seasonNumber);
+                                setDetailsOpen(false);
+                            }}
+                            disabled={!onToggleSeasonWatched || actionState?.disabled}
+                            className={`mt-2 w-full rounded-md px-2 py-1 font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                actionState?.allWatched
+                                    ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-300"
+                                    : "bg-black text-white hover:bg-black/85 dark:bg-white dark:text-black dark:hover:bg-white/85"
+                            }`}
+                        >
+                            {actionState?.loading
+                                ? "Updating..."
+                                : actionState?.allWatched
+                                    ? "Season watched"
+                                    : "Mark season watched"}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

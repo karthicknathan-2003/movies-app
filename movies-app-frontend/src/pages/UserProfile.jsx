@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FaUser, FaSpinner, FaUserPlus, FaUserCheck, FaList, FaMapMarkerAlt } from "react-icons/fa";
 import { useAuth } from "@/components/context/AuthContext";
 import { toast } from "sonner";
-import { BreadCrumbs } from "@/utils/helper";
+import { BreadCrumbs, SEVEN_COLUMN_CARD_GRID_CLASS } from "@/utils/helper";
 import { getUserByUsername, followUser, unfollowUser, getUserStats } from "@/api/userService";
 import { watchlistGroupApi } from "@/api/tmdb";
 
@@ -276,7 +276,7 @@ export default function UserProfile() {
                         <FaList className="text-blue-500" />
                         Watchlists ({groups.length})
                     </h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-8">
+                    <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-3 mb-8`}>
                         {groups.map((group) => (
                             <div
                                 key={group.id}

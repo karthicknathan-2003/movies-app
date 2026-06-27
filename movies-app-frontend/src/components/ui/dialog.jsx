@@ -34,11 +34,12 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
       )}
       {...props}>
       {children}
-      <DialogPrimitive.Close
+      {/* The close button is commented out to avoid accessibility issues with screen elements. Due to click outside detection, the close button is not necessary for closing the dialog. Users can click outside the dialog to close it. */}
+      {/* <DialogPrimitive.Close
         className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
+      </DialogPrimitive.Close> */}
     </DialogPrimitive.Content>
   </DialogPortal>
 ))

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { tmdb } from "@/api/tmdb";
-import { BreadCrumbs, Card, SkeletonCard } from "@/utils/helper";
+import { BreadCrumbs, Card, SkeletonCard, SEVEN_COLUMN_CARD_GRID_CLASS } from "@/utils/helper";
 import Pagination from "@/components/Pagination";
 import { FaFilm, FaTv, FaSlidersH, FaTimes } from "react-icons/fa";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -165,8 +165,11 @@ export default function Discover() {
         return () => { stale = true; };
     }, [mediaType, genreId, year, sortBy, minRating, page, viewMode]);
 
-    /* Reset to page 1 whenever any filter changes */
-    useEffect(() => { setPage(1); }, [mediaType, genreId, year, sortBy, minRating]);
+    /* Reset the results and page, whenever the active query changes. */
+    useEffect(() => {
+        setResults([]);
+        setPage(1);
+    }, [mediaType, genreId, year, sortBy, minRating]);
 
     useEffect(() => {
         setResults([]);
@@ -196,6 +199,7 @@ export default function Discover() {
 
     const activeGenre = genres.find(g => g.id === genreId);
     const hasMore = page < Math.min(totalPages, 50);
+    const showInitialLoadingState = loading && results.length === 0;
     const infiniteSentinelRef = useInfiniteScrollTrigger({
         enabled: viewMode === "infinite",
         loading,
@@ -378,8 +382,8 @@ export default function Discover() {
                 </div>
 
                 {/* Results grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-4">
-                    {loading
+                <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4`}>
+                    {showInitialLoadingState
                         ? Array.from({ length: 20 }).map((_, i) => <SkeletonCard key={i} />)
                         : results.length === 0
                             ? (

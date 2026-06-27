@@ -1,6 +1,31 @@
 const USER_KEY = "user";
 const FULL_NAME_KEY = "fullName";
 const REDIRECT_AFTER_LOGIN_KEY = "redirectAfterLogin";
+const AUTH_ROUTE_PATHS = new Set(["/login", "/signup"]);
+
+/**
+ * Normalizes a pathname to ensure it starts with a leading slash and is not empty.
+ * Returns null for invalid or empty pathnames.
+ */
+function normalizePath(pathname) {
+    if (typeof pathname !== "string") {
+        return null;
+    }
+    const trimmedPath = pathname.trim();
+    if (!trimmedPath) {
+        return null;
+    }
+    return trimmedPath.startsWith("/") ? trimmedPath : `/${trimmedPath}`;
+}
+
+/**
+ * Checks if a given pathname is allowed for redirect after login.
+ * Disallows redirecting to login or signup pages, to prevent redirect loops.
+ */
+function isAllowedRedirectPath(pathname) {
+    const normalizedPath = normalizePath(pathname);
+    return Boolean(normalizedPath) && !AUTH_ROUTE_PATHS.has(normalizedPath.split("?")[0]);
+}
 
 /**
  * Keeps auth-related browser storage access in one place.
@@ -42,7 +67,12 @@ export function clearStoredSession() {
  * Saves the current route so users can continue where they left off after logging in.
  */
 export function saveRedirectAfterLogin(pathname) {
-    sessionStorage.setItem(REDIRECT_AFTER_LOGIN_KEY, pathname);
+    if (!isAllowedRedirectPath(pathname)) {
+        sessionStorage.removeItem(REDIRECT_AFTER_LOGIN_KEY);
+        return;
+    }
+
+    sessionStorage.setItem(REDIRECT_AFTER_LOGIN_KEY, normalizePath(pathname));
 }
 
 /**
@@ -51,10 +81,9 @@ export function saveRedirectAfterLogin(pathname) {
  */
 export function consumeRedirectAfterLogin() {
     const redirectPath = sessionStorage.getItem(REDIRECT_AFTER_LOGIN_KEY);
-    if (redirectPath) {
-        sessionStorage.removeItem(REDIRECT_AFTER_LOGIN_KEY);
-    }
-    return redirectPath;
+    sessionStorage.removeItem(REDIRECT_AFTER_LOGIN_KEY);
+
+    return isAllowedRedirectPath(redirectPath) ? normalizePath(redirectPath) : null;
 }
 
 export function readToken() {

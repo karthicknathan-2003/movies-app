@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { watchlistApi } from "@/api/watchlist";
-import { Card, BreadCrumbs, useClickOutsideDropdown } from "@/utils/helper";
+import { Card, BreadCrumbs, SEVEN_COLUMN_CARD_GRID_CLASS, useClickOutsideDropdown, EmptyState } from "@/utils/helper";
 import { FaChevronDown, FaFilter, FaTrash } from "react-icons/fa";
 
 const STATUS_META = {
@@ -205,9 +205,14 @@ export default function Favorites() {
                 </div>
 
                 {displayItems.length === 0 ? (
-                    <p className="text-center opacity-60 py-12">No favorites yet ❤️</p>
+                    <EmptyState
+                        icon={<FaFilter size={32} />}
+                        title="Nothing here yet"
+                        subtitle="You haven't added any movies or TV shows to your favorites yet."
+                        action={{ label: "Browse Catalog", onClick: () => navigate("/catalog") }}
+                    />
                 ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
+                    <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4 sm:gap-6`}>
                         {displayItems.map(item => (
                             <div
                                 key={item.movieId}

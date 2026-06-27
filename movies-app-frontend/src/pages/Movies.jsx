@@ -3,12 +3,14 @@ import { tmdb } from "../api/tmdb";
 import { Card, SkeletonCard, BreadCrumbs } from "@/utils/helper";
 import { useNavigate } from "react-router-dom";
 import Pagination from "@/components/Pagination";
-import { FaSearch, FaSpinner } from "react-icons/fa";
+import { FaSpinner } from "react-icons/fa";
 import { useCatalogSearch } from "@/components/hooks/useCatalogSearch";
 import { useRecentlyViewed } from "@/components/hooks/useRecentlyViewed";
 import { useInfiniteScrollTrigger } from "@/components/hooks/useInfiniteScrollTrigger";
 import { useAppSettings } from "@/components/context/AppSettingsContext";
 import { useWatchlistIds } from "@/components/hooks/useWatchlistIds";
+import CatalogSearchInput from "@/components/CatalogSearchInput";
+import { SEVEN_COLUMN_CARD_GRID_CLASS } from "@/utils/helper";
 
 const TOTAL_PAGES = 20;
 const PAGE_SIZE = 20;
@@ -103,15 +105,10 @@ export default function Movies() {
 
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
                             <div className="relative w-full sm:w-56">
-                                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
-                                <input
-                                    type="text"
+                                <CatalogSearchInput
                                     value={query}
                                     onChange={(event) => setQuery(event.target.value)}
                                     placeholder="Search loaded titles..."
-                                    className="w-full pl-8 pr-3 py-2 text-sm rounded border border-black/20 dark:border-white/20
-                                        bg-white dark:bg-zinc-900 text-black dark:text-white
-                                        focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white"
                                 />
                             </div>
 
@@ -140,7 +137,7 @@ export default function Movies() {
                     </p>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
+                <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4 sm:gap-6`}>
                     {loading && movies.length === 0
                         ? Array.from({ length: 12 }).map((_, index) => <SkeletonCard key={index} />)
                         : filtered.map((item, index) => (

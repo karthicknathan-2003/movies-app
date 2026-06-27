@@ -14,11 +14,12 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "./context/AuthContext";
 import { toast } from "sonner";
-import { AuthDivider } from "@/utils/helper";
+import { AuthDivider, GoogleAuthButtonShell } from "@/utils/helper";
 import { consumeRedirectAfterLogin } from "@/utils/authSession";
 
 export default function LoginCard() {
     const [loading, setLoading] = useState(false);
+    // Tracks the short backend exchange after Google returns its credential.
     const [googleLoading, setGoogleLoading] = useState(false);
 
     const [credentials, setCredentials] = useState({
@@ -52,7 +53,7 @@ export default function LoginCard() {
         try {
             await login(credentials);
             toast.success("Welcome back!");
-            navigate(consumeRedirectAfterLogin() || "/");
+            navigate(consumeRedirectAfterLogin() || "/", { replace: true });
         } catch (error) {
             console.error(error);
         } finally {
@@ -62,12 +63,13 @@ export default function LoginCard() {
 
     const handleGoogleSuccess = useCallback(
         async (response) => {
+            // Show a visible loading state while we swap the Google credential for our auth cookie.
             setGoogleLoading(true);
 
             try {
                 await loginWithGoogle(response.credential);
                 toast.success("Signed in successfully!");
-                navigate(consumeRedirectAfterLogin() || "/");
+                navigate(consumeRedirectAfterLogin() || "/", { replace: true });
             } catch (error) {
                 console.error(error);
             } finally {
@@ -111,7 +113,7 @@ export default function LoginCard() {
                             value={credentials.userName}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            disabled={loading}
+                            disabled={loading || googleLoading}
                             placeholder="Enter username"
                             autoComplete="username"
                         />
@@ -126,7 +128,7 @@ export default function LoginCard() {
                             value={credentials.password}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            disabled={loading}
+                            disabled={loading || googleLoading}
                             placeholder="••••••••"
                             autoComplete="current-password"
                             showPasswordToggle
@@ -135,7 +137,7 @@ export default function LoginCard() {
 
                     <Button
                         className="w-full"
-                        disabled={loading || !isFormValid}
+                        disabled={loading || googleLoading || !isFormValid}
                         onClick={handleLogin}
                     >
                         {loading ? (
@@ -151,15 +153,21 @@ export default function LoginCard() {
                     <AuthDivider text="or continue with Google" />
                     {/* Google Login */}
                     <div className="flex justify-center">
-                        <GoogleLogin
-                            onSuccess={handleGoogleSuccess}
-                            onError={handleGoogleError}
-                            text="signin_with" 
-                            shape="rectangular"
-                            size="large"
-                            width="320"
-                            disabled={googleLoading}
-                        />
+                        <GoogleAuthButtonShell
+                            loading={googleLoading}
+                            loadingText="Signing in with Google..."
+                        >
+                            <div className="overflow-hidden rounded-md">
+                                <GoogleLogin
+                                    onSuccess={handleGoogleSuccess}
+                                    onError={handleGoogleError}
+                                    text="signin_with"
+                                    shape="rectangular"
+                                    size="large"
+                                    width="320"
+                                />
+                            </div>
+                        </GoogleAuthButtonShell>
                     </div>
                     {/* Footer */}
                     <p className="text-center text-sm text-muted-foreground">

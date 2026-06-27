@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { tmdb } from "../api/tmdb";
-import { Card, SkeletonCard, BreadCrumbs } from "@/utils/helper";
+import { Card, SkeletonCard, BreadCrumbs, SEVEN_COLUMN_CARD_GRID_CLASS } from "@/utils/helper";
 import Pagination from "@/components/Pagination";
 import { FaSpinner } from "react-icons/fa";
 import { useInfiniteScrollTrigger } from "@/components/hooks/useInfiniteScrollTrigger";
 import { useAppSettings } from "@/components/context/AppSettingsContext";
+import { useCatalogSearch } from "@/components/hooks/useCatalogSearch";
+import CatalogSearchInput from "@/components/CatalogSearchInput";
 
 const TOTAL_PAGES = 20;
 const PAGE_SIZE = 20;
@@ -23,6 +25,7 @@ export default function Celebrities() {
     const [page, setPage] = useState(1);
 
     const navigate = useNavigate();
+    const { query, setQuery, filtered } = useCatalogSearch(people);
     const { defaultViewMode: viewMode } = useAppSettings();
 
     const goToCelebrity = useCallback((id) => navigate(`/celebrities/${id}`), [navigate]);
@@ -33,6 +36,12 @@ export default function Celebrities() {
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
     };
+
+    useEffect(() => {
+        if (viewMode === "pagination") {
+            setPage(1);
+        }
+    }, [query, viewMode]);
 
     useEffect(() => {
         setPeople([]);
@@ -59,7 +68,7 @@ export default function Celebrities() {
     }, [page, viewMode]);
 
     const infiniteSentinelRef = useInfiniteScrollTrigger({
-        enabled: viewMode === "infinite",
+        enabled: viewMode === "infinite" && !query.trim(),
         loading,
         hasMore: page < TOTAL_PAGES,
         onLoadMore: () => setPage((current) => current + 1),
@@ -77,14 +86,27 @@ export default function Celebrities() {
                     ]}
                 />
 
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-6">
-                    <h1 className="text-2xl sm:text-3xl font-bold">Popular Celebrities</h1>
-                    <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-col gap-3 mb-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <h1 className="text-2xl sm:text-3xl font-bold shrink-0">Popular Celebrities</h1>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+                            <CatalogSearchInput
+                                value={query}
+                                onChange={(event) => setQuery(event.target.value)}
+                                placeholder="Search loaded celebrities..."
+                            />
                         {viewMode === "pagination" && (
                             <Pagination page={page} totalPages={TOTAL_PAGES} onPageChange={handlePageChange} />
                         )}
+                        </div>
                     </div>
-                </div>
+
+                    {viewMode === "infinite" && (
+                        <p className="text-xs text-black/50 dark:text-white/50">
+                            Infinite scroll is enabled from Settings and will keep loading more as you move down the page.
+                        </p>
+                    )}
+                    </div>
 
                 {error && (
                     <p className="text-center text-red-500 mb-6">
@@ -92,10 +114,16 @@ export default function Celebrities() {
                     </p>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
+                {!loading && filtered.length === 0 && query.trim() && (
+                    <p className="text-center opacity-60 mt-10">
+                        No celebrities found for "{query}".
+                    </p>
+                )}
+
+                <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4 sm:gap-6`}>
                     {loading && people.length === 0
                         ? Array.from({ length: 12 }).map((_, index) => <SkeletonCard key={index} />)
-                        : people.map((person, index) => (
+                        : filtered.map((person, index) => (
                             <div
                                 key={person.id}
                                 className="group cursor-pointer"
@@ -128,7 +156,7 @@ export default function Celebrities() {
                     </div>
                 )}
 
-                {viewMode === "infinite" && page < TOTAL_PAGES && (
+                {viewMode === "infinite" && !query.trim() && page < TOTAL_PAGES && (
                     <div ref={infiniteSentinelRef} className="flex justify-center py-8">
                         {loading && people.length > 0 ? (
                             <FaSpinner className="animate-spin text-black/35 dark:text-white/35" />

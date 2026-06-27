@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "./context/AuthContext";
 import { toast } from "sonner";
-import { AuthDivider } from "@/utils/helper";
+import { AuthDivider, GoogleAuthButtonShell } from "@/utils/helper";
 
 export default function RegisterCard() {
     const [loading, setLoading] = useState(false);
@@ -110,7 +110,7 @@ export default function RegisterCard() {
                             value={form.firstName}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            disabled={loading}
+                            disabled={loading || googleLoading}
                             placeholder="John"
                             autoComplete="given-name"
                         />
@@ -124,7 +124,7 @@ export default function RegisterCard() {
                             value={form.lastName}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            disabled={loading}
+                            disabled={loading || googleLoading}
                             placeholder="Doe"
                             autoComplete="family-name"
                         />
@@ -138,7 +138,7 @@ export default function RegisterCard() {
                             value={form.userName}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            disabled={loading}
+                            disabled={loading || googleLoading}
                             placeholder="Username"
                             autoComplete="username"
                         />
@@ -153,7 +153,7 @@ export default function RegisterCard() {
                             value={form.password}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            disabled={loading}
+                            disabled={loading || googleLoading}
                             placeholder="••••••••"
                             autoComplete="new-password"
                             showPasswordToggle
@@ -162,7 +162,7 @@ export default function RegisterCard() {
 
                     <Button
                         className="w-full"
-                        disabled={loading || !isFormValid}
+                        disabled={loading || googleLoading || !isFormValid}
                         onClick={handleRegister}
                     >
                         {loading ? (
@@ -178,15 +178,21 @@ export default function RegisterCard() {
                     <AuthDivider text="or continue with Google" />
                     {/* Google Login */}
                     <div className="flex justify-center">
-                        <GoogleLogin
-                            onSuccess={handleGoogleSuccess}
-                            onError={handleGoogleError}
-                            text="signup_with"
-                            shape="rectangular"
-                            size="large"
-                            width="320"
-                            disabled={googleLoading}
-                        />
+                        <GoogleAuthButtonShell
+                            loading={googleLoading}
+                            loadingText="Signing up with Google..."
+                        >
+                            <div className="overflow-hidden rounded-md">
+                                <GoogleLogin
+                                    onSuccess={handleGoogleSuccess}
+                                    onError={handleGoogleError}
+                                    text="signup_with"
+                                    shape="rectangular"
+                                    size="large"
+                                    width="320"
+                                />
+                            </div>
+                        </GoogleAuthButtonShell>
                     </div>
                     {/* Footer */}
                     <p className="text-center text-sm text-muted-foreground">

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Card } from "@/utils/helper";
+import { Card, SEVEN_COLUMN_CARD_GRID_CLASS } from "@/utils/helper";
 import { FaClock, FaTrash } from "react-icons/fa";
 
 /**
@@ -43,7 +43,7 @@ export default function RecentlyViewed({ items, clearAll, watchlistIds }) {
             </div>
 
             {/* Horizontal scroll row — uses the shared Card component */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-4">
+            <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4`}>
                 {items.slice(0, 15).map(item => (
                     <div key={`${item.media_type}-${item.id}`} className="group">
                         <Card

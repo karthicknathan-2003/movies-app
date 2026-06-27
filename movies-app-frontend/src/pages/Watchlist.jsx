@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { watchlistApi } from "@/api/watchlist";
-import { Card, BreadCrumbs, useClickOutsideDropdown, EmptyState } from "@/utils/helper";
+import { Card, BreadCrumbs, useClickOutsideDropdown, EmptyState, SEVEN_COLUMN_CARD_GRID_CLASS } from "@/utils/helper";
 import { FaChevronDown, FaFilter, FaTrash } from "react-icons/fa";
 import { watchlistGroupApi } from "@/api/tmdb";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,7 +35,7 @@ const TYPE_OPTIONS = {
 
 function WatchlistGridSkeleton() {
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
+        <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4 sm:gap-6`}>
             {Array.from({ length: 12 }).map((_, index) => (
                 <div key={index} className="space-y-2">
                     {/* Matching the final card shape avoids layout jumps while data loads. */}
@@ -241,7 +241,7 @@ export default function Watchlist() {
 
                 {!loading && displayItems.length === 0 && (
                     <EmptyState
-                        icon="🍿"
+                        icon={<FaFilter size={32} />}
                         title="Nothing here yet"
                         subtitle="Add movies and series to your watchlist to track what you want to watch."
                         action={{ label: "Browse Catalog", onClick: () => navigate("/catalog") }}
@@ -249,7 +249,7 @@ export default function Watchlist() {
                 )}
 
                 {!loading && displayItems.length !== 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 sm:gap-6">
+                    <div className={`${SEVEN_COLUMN_CARD_GRID_CLASS} gap-4 sm:gap-6`}>
                         {displayItems.map(item => (
                             <div
                                 key={item.movieId}
