@@ -89,6 +89,12 @@
 			<version>2.2.0</version>
 		</dependency>
 
+		<!-- OAuth2 Client (for backend-driven Google login redirect) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-client</artifactId>
+		</dependency>
+
 		<!-- Caching -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
