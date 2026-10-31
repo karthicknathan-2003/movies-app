@@ -11,8 +11,8 @@ import Search from "./pages/Search";
 import MovieDetails from "./components/MovieDetails";
 import SeriesDetails from "./components/SeriesDetails";
 
-// Google-only login — no separate register page needed.
 import LoginCard from "./components/LoginCard";
+import LoginCallback from "./pages/LoginCallback";
 
 import Profile from "./pages/Profile";
 import Users from "./pages/Users";
@@ -46,6 +46,20 @@ function ScrollToTopOnRouteChange() {
     return null;
 }
 
+function NormalizeDuplicateSlashes() {
+    const { pathname, search } = useLocation();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (pathname.includes("//")) {
+            const cleanPath = pathname.replace(/\/+/g, "/");
+            navigate(cleanPath + search, { replace: true });
+        }
+    }, [pathname, search, navigate]);
+
+    return null;
+}
+
 function App() {
     const navigate = useNavigate();
 
@@ -58,6 +72,7 @@ function App() {
     return (
         <AppSettingsProvider>
             <div className="flex flex-col min-h-screen bg-white dark:bg-black text-black dark:text-white">
+                <NormalizeDuplicateSlashes />
                 <ScrollToTopOnRouteChange />
                 <Toaster richColors position="top-center" />
                 <Navbar />
@@ -70,6 +85,7 @@ function App() {
                         <Route path="/settings" element={<Settings />} />
 
                         <Route path="/login" element={<LoginCard />} />
+                        <Route path="/login/callback" element={<LoginCallback />} />
                         <Route path="/signup" element={<RegisterCard />} />
 
                         <Route path="/profile" element={<Profile />} />

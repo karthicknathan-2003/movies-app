@@ -1,4 +1,4 @@
-import { googleLogin, loginUser, logoutUser, registerUser } from "@/api/authService";
+import { loginUser, logoutUser, registerUser, getCurrentUser } from "@/api/authService";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { clearStoredSession, persistSession, readStoredSession } from "@/utils/authSession";
@@ -28,17 +28,22 @@ export function AuthProvider({ children }) {
     }, []);
 
     /**
-     * Authenticate with a Google ID token.
-     * Called from the login page after the Google button fires onSuccess.
+     * Called after OAuth2 redirect or session refresh.
+     * Calls /api/users/me to confirm the session is active, then hydrates the context.
+     * Falls back to passed credentials if server sync encounters an error.
      */
-    const loginWithGoogle = useCallback(async (credential) => {
+    const refreshSession = useCallback(async (fallbackUsername, fallbackFullName) => {
         try {
-            const res = await googleLogin(credential);
-            const { fullName, userName } = res.data;
-            persist(userName, fullName);
+            const res = await getCurrentUser();
+            // UserProfileDto returns `username` and `fullName`
+            const { username, fullName } = res.data;
+            persist(username, fullName);
+            return { username, fullName };
         } catch (error) {
-            const message = error.response?.data?.message || "Google sign-in failed. Please try again.";
-            toast.error(message);
+            if (fallbackUsername) {
+                persist(fallbackUsername, fallbackFullName || "");
+                return { username: fallbackUsername, fullName: fallbackFullName || "" };
+            }
             throw error;
         }
     }, [persist]);
@@ -88,11 +93,12 @@ export function AuthProvider({ children }) {
         fullName: session.fullName,
         token: session.token,
         isAuthenticated: Boolean(session.user),
-        loginWithGoogle,
+        refreshSession,
+        persist,
         login,
         register,
         logout,
-    }), [session, loginWithGoogle, login, register, logout]);
+    }), [session, refreshSession, persist, login, register, logout]);
 
     return (
         <AuthContext.Provider value={value}>

@@ -23,8 +23,16 @@ API.interceptors.response.use(
     }
 );
 
-// Sends the Google ID token to the backend and gets an app JWT back.
-export const googleLogin = (credential) => API.post("/google", { credential });
+// Separate instance for the /api/users endpoint.
+const USERS_API = axios.create({
+    baseURL: import.meta.env.VITE_USER_API_URL,
+    headers: { "Content-Type": "application/json" },
+    withCredentials: true,
+});
+
+// Fetches the current user's profile from /api/users/me using the HttpOnly cookie.
+// Used by LoginCallback to hydrate the AuthContext after the backend OAuth2 redirect.
+export const getCurrentUser = () => USERS_API.get("/me");
 
 // Legacy helpers kept for any remaining usages — can be removed later.
 export const loginUser = (data) => API.post("/login",    data);
