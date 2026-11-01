@@ -30,22 +30,13 @@ export function AuthProvider({ children }) {
     /**
      * Called after OAuth2 redirect or session refresh.
      * Calls /api/users/me to confirm the session is active, then hydrates the context.
-     * Falls back to passed credentials if server sync encounters an error.
      */
-    const refreshSession = useCallback(async (fallbackUsername, fallbackFullName) => {
-        try {
-            const res = await getCurrentUser();
-            // UserProfileDto returns `username` and `fullName`
-            const { username, fullName } = res.data;
-            persist(username, fullName);
-            return { username, fullName };
-        } catch (error) {
-            if (fallbackUsername) {
-                persist(fallbackUsername, fallbackFullName || "");
-                return { username: fallbackUsername, fullName: fallbackFullName || "" };
-            }
-            throw error;
-        }
+    const refreshSession = useCallback(async () => {
+        const res = await getCurrentUser();
+        // UserProfileDto returns `username` and `fullName`
+        const { username, fullName } = res.data;
+        persist(username, fullName);
+        return { username, fullName };
     }, [persist]);
 
     // Legacy email/password login — kept for backward compatibility.

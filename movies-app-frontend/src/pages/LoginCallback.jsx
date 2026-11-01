@@ -14,41 +14,29 @@ import { useAuth } from "@/components/context/AuthContext";
 export default function LoginCallback() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { refreshSession, persist } = useAuth();
+    const { refreshSession } = useAuth();
     const executedRef = useRef(false);
+
     useEffect(() => {
         if (executedRef.current) return;
         executedRef.current = true;
         const status = searchParams.get("status");
-        const username = searchParams.get("username");
-        const fullName = searchParams.get("fullName");
         if (status !== "success") {
             toast.error("Google sign-in failed. Please try again.");
+            navigate("/login", { replace: true });
             return;
         }
-        // The JWT cookie was already set by the backend OAuth2 success handler.
-        // Refresh the in-memory session so the rest of the app knows the user is logged in.
+        // The JWT cookie was set by the backend OAuth2 success handler.
+        // Verify active session with backend and hydrate context.
         refreshSession()
-        // 1. If username was provided in the callback query, immediately store it
-        if (username) {
-            persist(username, fullName || "");
-        }
-        // 2. Verify cookie & sync profile with backend, then proceed
-        refreshSession(username, fullName)
             .then(() => {
                 toast.success("Signed in with Google!");
                 navigate(consumeRedirectAfterLogin() || "/", { replace: true });
-            })
-            .catch(() => {
-                if (username) {
-                    toast.success("Signed in with Google!");
-                    navigate(consumeRedirectAfterLogin() || "/", { replace: true });
-                } else {
-                    toast.error("Could not restore your session. Please try again.");
-                    navigate("/login", { replace: true });
-                }
+            }).catch(() => {
+                toast.error("Could not restore your session. Please try again.");
+                navigate("/login", { replace: true });
             });
-    }, [searchParams, navigate, persist, refreshSession]);
+    }, [searchParams, navigate, refreshSession]);
     return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background">
             <Spinner size={32} />

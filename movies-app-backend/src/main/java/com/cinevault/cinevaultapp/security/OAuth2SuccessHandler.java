@@ -73,6 +73,11 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                     newUser.setPassword("");
                     return newUser;
                 });
+        if (user.getId() != null && user.getPassword() != null && !user.getPassword().isEmpty()) {
+            response.sendRedirect(frontendUrl.replaceAll("/+$", "")
+                    + "/login/callback?status=error");
+            return;
+        }
 
         user.setFirstName(firstName != null ? firstName : "");
         user.setLastName(lastName != null ? lastName : "");
@@ -87,12 +92,10 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         // Remove any trailing slash from frontendUrl to prevent duplicate slashes like //login/callback.
         String redirectBase = frontendUrl.replaceAll("/+$", "");
-        String fullName = firstName + " " + lastName;
 
         String targetUrl = redirectBase + "/login/callback?status=success"
                 + "&username=" + URLEncoder.encode(userName, StandardCharsets.UTF_8)
-                + "&fullName=" + URLEncoder.encode(fullName, StandardCharsets.UTF_8);
-
+                + "&fullName=" + URLEncoder.encode(user.getFullName(), StandardCharsets.UTF_8);
         // Send the browser back to frontend.
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }
