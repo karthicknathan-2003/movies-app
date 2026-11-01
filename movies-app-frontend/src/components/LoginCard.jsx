@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { GoogleLogin } from "@react-oauth/google";
 import {
     Card,
     CardContent,
@@ -14,20 +13,18 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "./context/AuthContext";
 import { toast } from "sonner";
-import { AuthDivider, GoogleAuthButtonShell } from "@/utils/helper";
+import { AuthDivider } from "@/utils/helper";
 import { consumeRedirectAfterLogin } from "@/utils/authSession";
 
 export default function LoginCard() {
     const [loading, setLoading] = useState(false);
-    // Tracks the short backend exchange after Google returns its credential.
-    const [googleLoading, setGoogleLoading] = useState(false);
 
     const [credentials, setCredentials] = useState({
         userName: "",
         password: "",
     });
 
-    const { login, loginWithGoogle } = useAuth();
+    const { login } = useAuth();
     const navigate = useNavigate();
 
     const isFormValid =
@@ -61,28 +58,6 @@ export default function LoginCard() {
         }
     }, [credentials, isFormValid, login, navigate]);
 
-    const handleGoogleSuccess = useCallback(
-        async (response) => {
-            // Show a visible loading state while we swap the Google credential for our auth cookie.
-            setGoogleLoading(true);
-
-            try {
-                await loginWithGoogle(response.credential);
-                toast.success("Signed in successfully!");
-                navigate(consumeRedirectAfterLogin() || "/", { replace: true });
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setGoogleLoading(false);
-            }
-        },
-        [loginWithGoogle, navigate]
-    );
-
-    const handleGoogleError = useCallback(() => {
-        toast.error("Google sign-in failed.");
-    }, []);
-
     const handleKeyDown = useCallback(
         (e) => {
             if (e.key === "Enter") {
@@ -91,6 +66,15 @@ export default function LoginCard() {
         },
         [handleLogin]
     );
+
+    /**
+     * Redirect to the backend OAuth2 initiation URL.
+     * Spring Security takes over from here — it redirects to Google's consent screen,
+     * then back to the backend callback, which sets the cookie and redirects to /login/callback.
+     */
+    const handleGoogleLogin = useCallback(() => {
+        window.location.href = `${import.meta.env.VITE_BASE_URL}oauth2/authorization/google`;
+    }, []);
 
     return (
         <div className="min-h-screen flex items-center justify-center px-4 py-8 bg-background">
@@ -113,7 +97,7 @@ export default function LoginCard() {
                             value={credentials.userName}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            disabled={loading || googleLoading}
+                            disabled={loading}
                             placeholder="Enter username"
                             autoComplete="username"
                         />
@@ -128,8 +112,8 @@ export default function LoginCard() {
                             value={credentials.password}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            disabled={loading || googleLoading}
-                            placeholder="••••••••"
+                            disabled={loading}
+                            placeholder="********"
                             autoComplete="current-password"
                             showPasswordToggle
                         />
@@ -137,7 +121,7 @@ export default function LoginCard() {
 
                     <Button
                         className="w-full"
-                        disabled={loading || googleLoading || !isFormValid}
+                        disabled={loading || !isFormValid}
                         onClick={handleLogin}
                     >
                         {loading ? (
@@ -149,26 +133,28 @@ export default function LoginCard() {
                             "Sign In"
                         )}
                     </Button>
+
                     {/* Divider */}
-                    <AuthDivider text="or continue with Google" />
-                    {/* Google Login */}
-                    <div className="flex justify-center">
-                        <GoogleAuthButtonShell
-                            loading={googleLoading}
-                            loadingText="Signing in with Google..."
-                        >
-                            <div className="overflow-hidden rounded-md">
-                                <GoogleLogin
-                                    onSuccess={handleGoogleSuccess}
-                                    onError={handleGoogleError}
-                                    text="signin_with"
-                                    shape="rectangular"
-                                    size="large"
-                                    width="320"
-                                />
-                            </div>
-                        </GoogleAuthButtonShell>
-                    </div>
+                    <AuthDivider text="or continue with" />
+
+                    {/* Google Login - backend-driven OAuth2 redirect */}
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full flex items-center justify-center gap-3"
+                        onClick={handleGoogleLogin}
+                        disabled={loading}
+                    >
+                        {/* Google "G" logo */}
+                        <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                        </svg>
+                        Continue with Google
+                    </Button>
+
                     {/* Footer */}
                     <p className="text-center text-sm text-muted-foreground">
                         Don't have an account?{" "}

@@ -3,12 +3,14 @@ package com.cinevault.cinevaultapp.controller;
 import com.cinevault.cinevaultapp.dto.AuthRequestDto;
 import com.cinevault.cinevaultapp.dto.AuthResponseDto;
 import com.cinevault.cinevaultapp.security.JwtUtil;
-import jakarta.servlet.http.HttpServletRequest;
 import com.cinevault.cinevaultapp.service.AuthServices;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * REST controller for handling authentication-related operations.
@@ -16,19 +18,19 @@ import org.springframework.web.bind.annotation.*;
  *
  * @author karthicknathan
  * @since Feb 04, 2026
- *
- * @version 1.0
  */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
     private static final String HTTPS = "https";
 
-    @Autowired
-    private AuthServices authService;
+    private final AuthServices authService;
+    private final JwtUtil jwtUtil;
 
-    @Autowired
-    private JwtUtil jwtUtil;
+    public AuthController(AuthServices authService, JwtUtil jwtUtil) {
+        this.authService = authService;
+        this.jwtUtil = jwtUtil;
+    }
 
     /**
      * Registers a new user in the system.
@@ -58,22 +60,6 @@ public class AuthController {
                 // The JWT now travels in an HttpOnly cookie instead of browser-readable storage.
                 .header(HttpHeaders.SET_COOKIE,
                         jwtUtil.createAuthCookie(response.getToken(), isSecureRequest(request)))
-                .body(new AuthResponseDto(response.getUserName(), response.getFullName(), null));
-    }
-
-    /**
-     * Exchanges a Google ID token for an application JWT.
-     *
-     * @param request - contains the Google credential (ID token) from the frontend.
-     * @return - {@code AuthResponseDto} with the userName and app JWT.
-     */
-    @PostMapping("/google")
-    public ResponseEntity<AuthResponseDto> googleLogin(@RequestBody AuthRequestDto request,
-                                                       HttpServletRequest httpRequest) {
-        AuthResponseDto response = authService.authenticateWithGoogle(request.getCredential());
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE,
-                        jwtUtil.createAuthCookie(response.getToken(), isSecureRequest(httpRequest)))
                 .body(new AuthResponseDto(response.getUserName(), response.getFullName(), null));
     }
 

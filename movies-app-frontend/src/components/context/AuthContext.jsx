@@ -1,4 +1,4 @@
-import { googleLogin, loginUser, logoutUser, registerUser } from "@/api/authService";
+import { loginUser, logoutUser, registerUser, getCurrentUser } from "@/api/authService";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { clearStoredSession, persistSession, readStoredSession } from "@/utils/authSession";
@@ -28,19 +28,15 @@ export function AuthProvider({ children }) {
     }, []);
 
     /**
-     * Authenticate with a Google ID token.
-     * Called from the login page after the Google button fires onSuccess.
+     * Called after OAuth2 redirect or session refresh.
+     * Calls /api/users/me to confirm the session is active, then hydrates the context.
      */
-    const loginWithGoogle = useCallback(async (credential) => {
-        try {
-            const res = await googleLogin(credential);
-            const { fullName, userName } = res.data;
-            persist(userName, fullName);
-        } catch (error) {
-            const message = error.response?.data?.message || "Google sign-in failed. Please try again.";
-            toast.error(message);
-            throw error;
-        }
+    const refreshSession = useCallback(async () => {
+        const res = await getCurrentUser();
+        // UserProfileDto returns `username` and `fullName`
+        const { username, fullName } = res.data;
+        persist(username, fullName);
+        return { username, fullName };
     }, [persist]);
 
     // Legacy email/password login — kept for backward compatibility.
@@ -88,11 +84,12 @@ export function AuthProvider({ children }) {
         fullName: session.fullName,
         token: session.token,
         isAuthenticated: Boolean(session.user),
-        loginWithGoogle,
+        refreshSession,
+        persist,
         login,
         register,
         logout,
-    }), [session, loginWithGoogle, login, register, logout]);
+    }), [session, refreshSession, persist, login, register, logout]);
 
     return (
         <AuthContext.Provider value={value}>
